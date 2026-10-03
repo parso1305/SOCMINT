@@ -109,6 +109,38 @@ def check(
 
 
 @app.command()
+def bot() -> None:
+    """Start the Telegram tipline bot (needs TELEGRAM_BOT_TOKEN)."""
+    from socmint.core.db import init_db
+    from socmint.tipline.telegram_bot import run_bot
+
+    init_db()
+    run_bot()
+
+
+@app.command()
+def api(host: str = typer.Option("127.0.0.1", help="Bind address (keep local)."), port: int = 8000) -> None:
+    """Start the FastAPI service."""
+    import uvicorn
+
+    uvicorn.run("socmint.api.app:app", host=host, port=port, log_level="info")
+
+
+@app.command("telegram-login")
+def telegram_login() -> None:
+    """One-time interactive Telethon login for reading public channels (needs TELEGRAM_API_ID/HASH)."""
+    from telethon.sync import TelegramClient
+
+    from socmint.ingest.telegram_channels import session_path
+
+    s = get_settings()
+    if not s.has("telegram_api_id", "telegram_api_hash"):
+        raise typer.BadParameter("set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env first")
+    with TelegramClient(session_path(), int(s.telegram_api_id), s.telegram_api_hash) as c:
+        typer.echo(f"Logged in as a Telethon session: {bool(c.is_user_authorized())}")
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__
