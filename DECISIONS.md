@@ -62,3 +62,14 @@ Choices made without asking (as permitted by the build prompt), with the reasoni
 - First live scan: 262 registered lookalikes (HDFC 56, ICICI 86, Paytm 56, SBI 36, PhonePe 23, MSEDCL 5; none under gov.in). Scan-only lookalikes are **low** severity because registration is weak evidence (parked or defensive). Use in a tipline message or public post creates a separate **medium** impersonation alert.
 - "Seen before" is a linear scan over `media_seen` (fine up to about 100k hashes; a BK-tree / FAISS binary index is a v1 item). Fact-check context is listed before earlier tipline submissions.
 - Video: one ffmpeg keyframe every 5 s (max 30), each pHashed; the audio track goes to ASR.
+
+## Narratives & coordination (M5)
+- HDBSCAN (scikit-learn) on L2-normalised embeddings with Euclidean distance (equivalent ordering to cosine). `min_cluster_size: 5`.
+- Keywords: class-based TF-IDF with a token pattern that keeps Devanagari vowel signs inside words, plus small en/hi/mr stopword lists (`config/stopwords.yaml`).
+- Fact-check linking by **member voting**: the 20 most central posts are each claim-matched; a fact-check is linked if at least max(2, 20%) of them match it. Easy to explain ("7 of 12 posts match").
+  In **TF-IDF mode** a link also needs at least 2 cluster keywords in the fact-check text. Character n-grams scored a false link (dam rumour → old "Demonagar bridge" fact-check, 0.463) above a true one (0.457).
+- Growth = count in the last 24h ÷ max(daily average of the previous 72h, 0.5). On a **first run** against RSS-only data growth is inflated, because feeds only hold recent items; real baselines build up over days.
+- CCS v0: MinHash (128 perms) over word 3-gram shingles; LSH at Jaccard 0.8; union-find groups of at least 3 posts by at least 3 accounts.
+  Score = 0.35·accounts (saturating at 10) + 0.35·synchrony (share within ±10 min of the median) + 0.15·channel diversity + 0.15·burstiness. Alert at ≥0.6 (high at ≥0.8).
+  Demo set: 0.928. Organic control (same text over 3 days): 0.372.
+- Coordination runs only on `telegram/reddit/youtube` items with an author handle. All of those sources need keys, so on real data it currently has nothing to analyse.
