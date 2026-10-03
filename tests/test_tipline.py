@@ -169,3 +169,23 @@ def test_cli_check_json():
     assert res.exit_code == 0, res.output
     out = json.loads(res.output)
     assert out["verdict"] == "likely_scam" and out["disclaimer"]
+
+
+def test_submission_evidence_sanitised_and_review_updates_indicators():
+    from socmint.tipline.pipeline import check, review_submission
+
+    r = check("DemoBank customer care refund pending, download AnyDesk, call helpline 9000000201 immediately, "
+              "fee to care.fee@demoupi", sender_id=7)
+    assert r.verdict == Verdict.LIKELY_SCAM
+    with session_scope() as s:
+        sub = s.get(Submission, r.submission_id)
+        blob = str(sub.reasons)
+        assert "9000000201" not in blob and "care.fee@demoupi" not in blob
+        assert {"type": "phone", "value": "+919000000201", "linked_brand": "demobank"} in sub.pending_indicators
+    out = review_submission(r.submission_id, "confirmed_scam")
+    assert out["indicators_updated"] >= 2
+    with session_scope() as s:
+        sub = s.get(Submission, r.submission_id)
+        assert sub.status == "reviewed" and sub.pending_indicators == []
+        ind = s.scalar(select(Indicator).where(Indicator.value == "+919000000201"))
+        assert ind.status == "confirmed"

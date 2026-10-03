@@ -80,3 +80,10 @@ Choices made without asking (as permitted by the build prompt), with the reasoni
 - Flag when mention_z ≥ 3 **and** volume_z ≥ 3 **and** mentions ≥ 5. Risk score = 50 base + 15 small/illiquid (not NIFTY 100 and average turnover below ₹5 crore) + 15 promotional language (at least 30% of posts hit the investment-scam keywords) + 15 unverified SEBI claim (number not in the registry CSV, or a claim with no number) + 5 price move of 10% or more.
 - **No recommendations**: alert title, summary and disclaimer come from fixed neutral templates. Promoter posts are kept only under `quoted_posts`. A test asserts generated text never contains buy/sell/hold/target/prediction wording (en/hi/mr).
 - Real-data note: news RSS headlines almost never contain tickers, so live alerts need the key-gated Telegram/Reddit/YouTube sources.
+
+## Dashboard & review (M7)
+- **Privacy fix found while building the review flow**: evidence stored on `Submission.reasons` is now sanitised (no phone or UPI values). The values needed for "review → update indicator status" sit in `pending_indicators`, a deliberately **time-limited** link that is wiped on review and by retention (`RETENTION_DAYS`). After that, nothing ties a sender pseudonym to an indicator.
+- Review outcomes: confirmed_scam → indicators `confirmed`; benign → `benign`; misinformation / unclear → no indicator change. Every review is written to `audit_log`, and so is every dashboard page view.
+- `socmint dashboard --demo` browses `data/demo.db`. Streamlit runs headless on 127.0.0.1 (the first-run e-mail prompt otherwise blocks the server).
+- The hate / communal module's status ("not enabled") is shown on the Sources page.
+- Small additive migration in `init_db` (ALTER TABLE ADD COLUMN for new model columns), so existing DBs keep working.

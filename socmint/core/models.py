@@ -107,6 +107,9 @@ class Submission(Base):
     reasons: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="auto")
     review_outcome: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Indicator values awaiting analyst review (so the outcome can update their status). Time-limited link:
+    # wiped on review and by retention. Evidence in `reasons` is sanitised and never holds phone/UPI values.
+    pending_indicators: Mapped[list[Any]] = mapped_column(JSON, default=list)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 

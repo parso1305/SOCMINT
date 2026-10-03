@@ -153,6 +153,45 @@ def telegram_login() -> None:
 
 
 @app.command()
+def demo() -> None:
+    """Offline end-to-end demo on synthetic fixtures (zero keys, no internet). Uses data/demo.db."""
+    from socmint.demo import run_demo
+
+    s = run_demo()
+    typer.echo("\n================ SOCMINT-India demo (synthetic data only) ================")
+    typer.echo(f"DB: {s['db']}\nEmbedder: {s['embedder']}\nLoaded fixtures: {s['loaded']}")
+    typer.echo(f"\nTipline verdicts: {s['tipline_verdicts']}")
+    typer.echo(f"  fixture expectations met: {'all' if not s['fixture_mismatches'] else s['fixture_mismatches']}")
+    typer.echo(f"  URL from threat feed -> {s['threat_feed_check']}")
+    typer.echo(f"  image first sent -> {s['image_first_submission']}; re-compressed forward -> {s['image_forwarded_copy']}")
+    typer.echo(f"  submissions stored (de-identified): {s['submissions']}, queued for review: {s['queued_for_review']}")
+    typer.echo(f"Indicators (suspected/reported): {s['indicators']}   Registered lookalike domains: {s['registered_lookalikes']}")
+    typer.echo(f"Alerts by module: {s['alerts_by_module']}")
+    typer.echo(f"Top narrative: {s['top_narrative']}")
+    typer.echo(f"Top possible-coordination group: {s['top_coordination']}")
+    typer.echo(f"Market: {s['market_alert']}")
+    typer.echo(f"Modules: {s['modules']}")
+    typer.echo("\nNext: `socmint dashboard --demo` to browse every view with evidence.")
+
+
+@app.command()
+def dashboard(demo_db: bool = typer.Option(False, "--demo", help="Browse data/demo.db instead of the main DB."),
+              port: int = 8501) -> None:
+    """Start the Streamlit analyst dashboard (localhost)."""
+    import os
+    import subprocess
+
+    env = dict(os.environ)
+    if demo_db:
+        from socmint.demo import demo_db_path
+
+        env["SOCMINT_DB_URL"] = f"sqlite:///{demo_db_path().as_posix()}"
+    app_path = Path(__file__).parent / "dashboard" / "app.py"
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), "--server.address", "127.0.0.1",
+                    "--server.port", str(port), "--server.headless", "true", "--browser.gatherUsageStats", "false"], env=env, check=False)
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__

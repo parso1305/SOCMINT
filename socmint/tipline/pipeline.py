@@ -156,7 +156,7 @@ def check(
             try:
                 results[k] = f.result(timeout=60)
             except Exception as e:  # noqa: BLE001  (module isolation)
-                log.warning("module_failed", extra={"module": k, "error": f"{type(e).__name__}: {e}"[:300]})
+                log.warning("module_failed", extra={"analysis_module": k, "error": f"{type(e).__name__}: {e}"[:300]})
                 degraded.append(f"{k}_failed")
                 results[k] = [] if k != "scam" else scam.ScamResult(score=0.0)
     timings["analysis_ms"] = round((time.monotonic() - t1) * 1000, 1)
@@ -210,6 +210,22 @@ def check(
     return result
 
 
+_SENSITIVE_KEYS = {"numbers", "upi_ids", "phones"}
+
+
+def sanitize_evidence(obj: Any) -> Any:
+    """Remove phone numbers / UPI IDs from evidence before it is stored on a (sender-linked) submission."""
+    if isinstance(obj, dict):
+        if obj.get("type") in ("phone", "upi") and "value" in obj:
+            return {**obj, "value": "[REDACTED]"}
+        return {k: ("[REDACTED]" if k in _SENSITIVE_KEYS else sanitize_evidence(v)) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [sanitize_evidence(x) for x in obj]
+    if isinstance(obj, str):
+        return redact_pii(obj).text
+    return obj
+
+
 def _persist(result: CheckResult, redacted: str, kind: str, hashes: list[str], stored_path: Path | None,
              sh: str | None, channel: str, ent, sres: scam.ScamResult, synthetic: bool) -> int:
     with session_scope() as s:
@@ -217,7 +233,8 @@ def _persist(result: CheckResult, redacted: str, kind: str, hashes: list[str], s
             sender_hash=sh, channel=channel, type=kind, extracted_text=redacted, lang=result.lang,
             media_hash=hashes[0] if hashes else None, media_path=str(stored_path) if stored_path else None,
             verdict=result.verdict.value, score=result.score, status=result.status, synthetic=synthetic,
-            reasons={"reasons": [r.model_dump() for r in result.reasons],
+            pending_indicators=[i.model_dump() for i in result.indicators],
+            reasons={"reasons": sanitize_evidence([r.model_dump() for r in result.reasons]),
                      "matches": [m.model_dump(mode="json") for m in result.matches],
                      "seen_before": [m.model_dump(mode="json") for m in result.seen_before],
                      "entity_types": {k: len(v) for k, v in ent.as_dict().items()}, "degraded": result.degraded},
@@ -242,6 +259,33 @@ def _persist(result: CheckResult, redacted: str, kind: str, hashes: list[str], s
         media_provenance.register_media(hashes, kind="submission", ref_id=sub_id,
                                         context=f"Sent to the tipline ({kind})", synthetic=synthetic)
     return sub_id
+
+
+REVIEW_OUTCOMES = {"confirmed_scam": "confirmed", "benign": "benign", "misinformation": None, "unclear": None}
+
+
+def review_submission(submission_id: int, outcome: str, actor: str = "analyst") -> dict[str, Any]:
+    """Mark a submission reviewed; confirmed_scam / benign update its indicators, then the link is erased."""
+    from socmint.core.db import audit
+    from socmint.core.models import Indicator
+
+    if outcome not in REVIEW_OUTCOMES:
+        raise ValueError(f"outcome must be one of {sorted(REVIEW_OUTCOMES)}")
+    updated = 0
+    with session_scope() as s:
+        sub = s.get(Submission, submission_id)
+        if sub is None:
+            raise KeyError(submission_id)
+        new_status = REVIEW_OUTCOMES[outcome]
+        if new_status:
+            for pi in sub.pending_indicators or []:
+                ind = s.scalar(select(Indicator).where(Indicator.type == pi["type"], Indicator.value == pi["value"]))
+                if ind:
+                    ind.status = new_status
+                    updated += 1
+        sub.status, sub.review_outcome, sub.reviewed_at, sub.pending_indicators = "reviewed", outcome, utcnow(), []
+        audit(s, actor, "review_submission", f"submission={submission_id} outcome={outcome} indicators={updated}")
+    return {"submission_id": submission_id, "outcome": outcome, "indicators_updated": updated}
 
 
 def delete_sender(sender_id: str | int | None = None, sender_hash_value: str | None = None) -> int:
@@ -285,5 +329,8 @@ def apply_retention() -> dict[str, Any]:
                 Path(r.media_path).unlink(missing_ok=True)
             r.media_path = None
             cleared += 1
+        for r in db.scalars(select(Submission).where(Submission.received_at < cutoff)).all():
+            if r.pending_indicators:
+                r.pending_indicators = []
     log.info("retention_applied", extra={"files_deleted": len(deleted), "paths_cleared": cleared})
     return {"files_deleted": len(deleted), "paths_cleared": cleared, "retention_days": s.retention_days}

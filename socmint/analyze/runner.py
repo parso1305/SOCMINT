@@ -80,8 +80,8 @@ def run_modules(name: str = "all") -> list[dict[str, Any]]:
         try:
             res = fn()
             out.append({"module": mod, "status": "ok", "result": res, "seconds": round(time.monotonic() - t0, 1)})
-            log.info("module_ok", extra={"module": mod})
+            log.info("module_ok", extra={"analysis_module": mod})
         except Exception as e:  # noqa: BLE001  (module isolation)
             out.append({"module": mod, "status": "error", "error": f"{type(e).__name__}: {e}"[:500]})
-            log.warning("module_failed", extra={"module": mod, "error": str(e)[:300]})
+            log.warning("module_failed", extra={"analysis_module": mod, "error": str(e)[:300]})
     return out
