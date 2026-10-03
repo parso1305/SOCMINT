@@ -48,7 +48,8 @@ coordination:
   burst_reference_minutes: 360
 
 impersonation:
-  dnstwist_threads: 16
+  dnstwist_threads: 8
+  max_permutations_per_domain: 400   # homoglyph variants are sampled last
   dnstwist_fuzzers: [addition, bitsquatting, homoglyph, hyphenation, insertion, omission, repetition, replacement, subdomain, transposition, vowel-swap, dictionary, tld-swap]
 
 market:
@@ -72,3 +73,6 @@ ingest:
   http_retries: 3
   cache_ttl_s: 3600
   max_summary_chars: 400
+
+hate:
+  enabled: false   # interface only in v0; analyst-only, never shown to citizens

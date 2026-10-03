@@ -77,6 +77,18 @@ def ingest(source: str = typer.Option("all", "--source", "-s", help="Source name
 
 
 @app.command()
+def analyze(module: str = typer.Option("all", "--module", "-m", help="Module name or 'all'.")) -> None:
+    """Run analysis modules (embeddings, media, impersonation, narratives, coordination, market, hate)."""
+    from socmint.analyze.runner import run_modules
+    from socmint.core.db import init_db
+
+    init_db()
+    for r in run_modules(module):
+        detail = json.dumps(r.get("result") or r.get("error"), ensure_ascii=False, default=str)
+        typer.echo(f"{r['module']:<14} {r['status']:<6} {detail[:300]}")
+
+
+@app.command()
 def check(
     text: str = typer.Argument(None, help="Message text to check."),
     file: Path = typer.Option(None, "--file", "-f", help="Image / voice note / video / text file."),

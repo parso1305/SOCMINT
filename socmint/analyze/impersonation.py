@@ -156,13 +156,32 @@ def unofficial_contact_findings(ent: Entities) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------------------------
 # Batch scan: dnstwist permutations + DNS resolution
 # ---------------------------------------------------------------------------------------------
-def _dnstwist_scan(domain: str, threads: int, fuzzers: list[str] | None) -> list[dict[str, Any]]:
+def _resolve_a(host: str) -> list[str]:
+    """A records via the OS resolver (fast on Windows; dnspython's nameserver walk was timing out)."""
+    import socket
+
+    try:
+        ascii_host = host.encode("idna").decode("ascii")
+        return sorted({a[4][0] for a in socket.getaddrinfo(ascii_host, None, socket.AF_INET)})
+    except (OSError, UnicodeError):
+        return []
+
+
+def _dnstwist_scan(domain: str, threads: int, fuzzers: list[str] | None, max_perms: int = 400) -> list[dict[str, Any]]:
+    """dnstwist generates permutations; we resolve them ourselves (bounded, polite thread pool)."""
+    from concurrent.futures import ThreadPoolExecutor
+
     import dnstwist
 
-    kwargs: dict[str, Any] = {"domain": domain, "registered": True, "format": "null", "threads": threads}
-    if fuzzers:
-        kwargs["fuzzers"] = ",".join(fuzzers)
-    return list(dnstwist.run(**kwargs) or [])
+    fz = dnstwist.Fuzzer(domain)
+    fz.generate()
+    perms = [p for p in fz.permutations() if p["fuzzer"] != "*original" and (not fuzzers or p["fuzzer"] in fuzzers)]
+    # cheap, high-signal fuzzers first; homoglyph produces thousands of IDN variants, so it is sampled last
+    perms.sort(key=lambda p: p["fuzzer"] == "homoglyph")
+    perms = perms[:max_perms]
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        answers = list(pool.map(lambda p: _resolve_a(p["domain"]), perms))
+    return [{**p, "dns_a": a} for p, a in zip(perms, answers, strict=True) if a]
 
 
 def scan_lookalikes(threads: int | None = None) -> dict[str, Any]:
@@ -170,8 +189,9 @@ def scan_lookalikes(threads: int | None = None) -> dict[str, Any]:
     from socmint.core.http import is_offline
 
     cfg = load_config("thresholds").get("impersonation", {}) or {}
-    threads = threads or int(cfg.get("dnstwist_threads", 16))
+    threads = threads or int(cfg.get("dnstwist_threads", 8))
     fuzzers = cfg.get("dnstwist_fuzzers")
+    max_perms = int(cfg.get("max_permutations_per_domain", 400))
     summary: dict[str, Any] = {"brands": 0, "registered": 0, "new_alerts": 0, "errors": []}
     if is_offline():
         summary["errors"].append("offline: dnstwist scan skipped")
@@ -182,7 +202,7 @@ def scan_lookalikes(threads: int | None = None) -> dict[str, Any]:
         for dom in b.get("dnstwist_domains", b.get("official_domains", [])[:1]):
             summary["brands"] += 1
             try:
-                rows = _dnstwist_scan(dom, threads, fuzzers)
+                rows = _dnstwist_scan(dom, threads, fuzzers, max_perms)
             except Exception as e:  # noqa: BLE001  (one brand failing never stops the scan)
                 summary["errors"].append(f"{dom}: {type(e).__name__}: {e}")
                 log.warning("dnstwist_failed", extra={"domain": dom, "error": str(e)})
@@ -206,6 +226,47 @@ def scan_lookalikes(threads: int | None = None) -> dict[str, Any]:
     return summary
 
 
+def scan_items(days: int = 7) -> dict[str, Any]:
+    """Public items that mention a brand alongside non-official links/numbers -> indicators + alerts."""
+    from datetime import timedelta
+
+    from socmint.core.models import Item
+    from socmint.core.schemas import IndicatorIn
+    from socmint.ingest.store import store_indicators
+    from socmint.understand.entities import extract_all
+
+    since = utcnow() - timedelta(days=days)
+    out = {"items_scanned": 0, "findings": 0, "alerts": 0}
+    with session_scope() as s:
+        items = s.scalars(select(Item).where((Item.published_at >= since) | (Item.published_at.is_(None)))).all()
+        existing = set(s.scalars(select(Alert.dedup_key).where(Alert.module == "impersonation")).all())
+        for it in items:
+            out["items_scanned"] += 1
+            ent = extract_all(it.text or "")
+            if not ent.brands:
+                continue
+            fs = unofficial_contact_findings(ent)
+            fs += [{"brand": f["brand"], "type": "domain", "value": f["host"]} for h in ent.domains
+                   for f in lookalike_findings(h, check_db=False)]
+            if not fs:
+                continue
+            out["findings"] += len(fs)
+            store_indicators(s, [IndicatorIn(type=f["type"], value=f["value"], status="suspected", source=it.source,
+                                             linked_brand=f["brand"], synthetic=it.synthetic) for f in fs])
+            for bkey in sorted({f["brand"] for f in fs}):
+                key = f"item-imp:{bkey}:{it.source}:{it.external_id}"
+                if key in existing:
+                    continue
+                vals = [{"type": f["type"], "value": f["value"]} for f in fs if f["brand"] == bkey]
+                s.add(Alert(module="impersonation", severity="medium", dedup_key=key, synthetic=it.synthetic,
+                            title=f"Public post mentions {bkey} with non-official contact details",
+                            evidence={"brand": bkey, "non_official": vals, "item_url": it.url, "channel": it.channel,
+                                      "published_at": str(it.published_at), "source": it.source}))
+                existing.add(key)
+                out["alerts"] += 1
+    return out
+
+
 def record_lookalike(brand: str, domain: str, method: str, registered: bool, dns_a: list[str] | None = None,
                      dns_mx: list[str] | None = None, evidence: dict[str, Any] | None = None,
                      synthetic: bool = False) -> bool:
@@ -224,7 +285,9 @@ def record_lookalike(brand: str, domain: str, method: str, registered: bool, dns
         row.evidence = {**(row.evidence or {}), **(evidence or {})}
         if registered and first:
             live = "resolves (A record)" if dns_a else "has DNS records"
-            s.add(Alert(module="impersonation", severity="medium" if dns_a else "low",
+            # low: registration alone is weak evidence (parked / defensive registrations are common);
+            # actual use in a tipline message or public post raises a separate medium alert.
+            s.add(Alert(module="impersonation", severity="low",
                         title=f"Registered lookalike of {brand}: {domain} ({live})",
                         dedup_key=f"lookalike:{brand}:{domain}", synthetic=synthetic,
                         evidence={"brand": brand, "domain": domain, "method": method, "dns_a": dns_a or [],

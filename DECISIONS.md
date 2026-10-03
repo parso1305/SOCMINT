@@ -56,3 +56,9 @@ Choices made without asking (as permitted by the build prompt), with the reasoni
 - Without a background, raw cosine with threshold 0.90 is used (cross-lingual matches are then missed).
 - TF-IDF fallback (char_wb 2–5): threshold 0.45; true matches 0.76–0.83 on fixtures. Same-language only.
 - All 40 tipline fixtures pass on both backends (fc_cross needs e5), including runs against the 90 real fact-checks, with no false matches.
+
+## Media & brands (M4)
+- **dnstwist generates permutations only; we resolve them ourselves** with the OS resolver (`getaddrinfo`) in an 8-thread pool. `dnstwist.run(registered=True)` took over 500 s per domain on Windows (dnspython walked slow nameservers), versus 4 s for 400 permutations now. The cap is 400 permutations per domain; IDN homoglyph variants (thousands) are sampled last.
+- First live scan: 262 registered lookalikes (HDFC 56, ICICI 86, Paytm 56, SBI 36, PhonePe 23, MSEDCL 5; none under gov.in). Scan-only lookalikes are **low** severity because registration is weak evidence (parked or defensive). Use in a tipline message or public post creates a separate **medium** impersonation alert.
+- "Seen before" is a linear scan over `media_seen` (fine up to about 100k hashes; a BK-tree / FAISS binary index is a v1 item). Fact-check context is listed before earlier tipline submissions.
+- Video: one ffmpeg keyframe every 5 s (max 30), each pHashed; the audio track goes to ASR.
