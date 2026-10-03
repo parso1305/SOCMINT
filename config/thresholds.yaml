@@ -7,8 +7,14 @@ scam:
 
 claim_match:
   top_k: 3
-  e5: 0.80          # cosine threshold for multilingual-e5 (calibrated on fixtures, see DECISIONS.md)
-  tfidf: 0.45       # cosine threshold for the TF-IDF char n-gram fallback
+  # e5 cosines are compressed (unrelated pairs reach ~0.88), so we subtract the mean embedding of a
+  # background corpus (recent items + fact-checks) before cosine. Calibrated on fixtures - see DECISIONS.md.
+  e5_centered: 0.52     # centered-cosine threshold (used when >= center_min_background texts exist)
+  e5: 0.90              # raw-cosine fallback threshold (prompt suggested 0.80; too loose on fixtures)
+  center_min_background: 30
+  background_mean_file: data/e5_background_mean.npy   # shipped; recompute: socmint analyze --module background
+  background_items: 1000
+  tfidf: 0.45           # cosine threshold for the TF-IDF char n-gram fallback
 
 media:
   phash_max_distance: 8
@@ -40,6 +46,10 @@ coordination:
     burst: 0.15       # 1 - time_span / burst_reference
   accounts_saturation: 10
   burst_reference_minutes: 360
+
+impersonation:
+  dnstwist_threads: 16
+  dnstwist_fuzzers: [addition, bitsquatting, homoglyph, hyphenation, insertion, omission, repetition, replacement, subdomain, transposition, vowel-swap, dictionary, tld-swap]
 
 market:
   baseline_days: 30

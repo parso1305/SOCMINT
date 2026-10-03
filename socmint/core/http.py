@@ -123,6 +123,7 @@ class PoliteClient:
 
     def _cache_put(self, key: str, content: bytes, url: str, status: int) -> None:
         body, meta = self._cache_paths(key)
+        url = url.split("?")[0]  # never persist query strings (they may carry API keys)
         body.parent.mkdir(parents=True, exist_ok=True)
         body.write_bytes(content)
         meta.write_text(json.dumps({"url": url, "status": status, "fetched_at": time.time()}))
@@ -139,6 +140,7 @@ class PoliteClient:
         method: str = "GET",
         data: dict[str, Any] | None = None,
         cache_key_extra: str = "",
+        json_body: Any = None,
     ) -> bytes:
         """Fetch `url` and return the body bytes.
 
@@ -150,7 +152,9 @@ class PoliteClient:
             raise OfflineError(f"offline mode: refusing to fetch {url}")
         ttl = float(threshold("ingest.cache_ttl_s", 3600)) if cache_ttl is None else cache_ttl
         safe_params = {k: v for k, v in (params or {}).items() if "key" not in k.lower()}
-        key = f"{method} {url} {json.dumps(safe_params, sort_keys=True)} {cache_key_extra}"
+        safe_url = url.split("?key=")[0]
+        body_key = json.dumps(json_body, sort_keys=True) if json_body is not None else ""
+        key = f"{method} {safe_url} {json.dumps(safe_params, sort_keys=True)} {body_key} {cache_key_extra}"
         cached = self._cache_get(key, ttl)
         if cached is not None:
             return cached
@@ -162,7 +166,7 @@ class PoliteClient:
         for attempt in range(self.retries + 1):
             self._wait(host)
             try:
-                r = self._client.request(method, url, params=params, headers=headers, auth=auth, data=data)
+                r = self._client.request(method, url, params=params, headers=headers, auth=auth, data=data, json=json_body)
             except httpx.HTTPError as e:
                 last_exc = e
                 status = None

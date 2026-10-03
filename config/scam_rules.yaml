@@ -1,4 +1,210 @@
-# Scam scoring rules (filled in M2). Editable without code changes.
+# Scam scoring rules. Edit freely; no code changes needed.
+#
+# Matching runs on normalised text (NFC, lowercase Latin, ASCII digits, emoji and nukta removed).
+# Latin keywords match on word boundaries; Devanagari keywords match as substrings (so stems like
+# "ब्लॉक" also catch "ब्लॉक्ड"). Score = sum of fired weights, capped at thresholds.scam.max_score.
+# A category fires once: weight + extra_hit_bonus per additional keyword hit (up to max_bonus).
+# Thresholds (likely / suspicious) live in thresholds.yaml.
+
+categories:
+  kyc_block:
+    label: "KYC / account-block threat"
+    weight: 35
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [kyc, update kyc, kyc pending, kyc expired, account blocked, account will be blocked, account suspended,
+           account will be suspended, account freeze, account frozen, pan card update, pan update, debit card blocked,
+           netbanking blocked, net banking blocked, yono blocked, re-kyc, rekyc, account deactivated, sim blocked]
+      hi: [केवाईसी, केवायसी, खाता बंद, खाता ब्लॉक, अकाउंट ब्लॉक, अकाउंट बंद, खाता निलंबित, पैन कार्ड अपडेट, पैन अपडेट]
+      mr: [केवायसी, खाते बंद, खाते ब्लॉक, अकाउंट ब्लॉक, अकाउंट बंद, पॅन कार्ड अपडेट, पॅन अपडेट]
+      hinglish: [kyc update karo, khata band, account band, account block ho, kyc nahi kiya]
+
+  digital_arrest:
+    label: "Digital arrest / police / customs threat"
+    weight: 45
+    extra_hit_bonus: 5
+    max_bonus: 15
+    keywords:
+      en: [digital arrest, arrest warrant, you will be arrested, money laundering, narcotics, drugs found,
+           cbi officer, cbi, ed officer, enforcement directorate, customs department, customs officer, cyber police,
+           crime branch, video call, stay on video call, do not disconnect, case registered against you, fir registered,
+           illegal parcel, verification amount, safe account, supreme court order, trai, number will be disconnected]
+      hi: [डिजिटल अरेस्ट, गिरफ्तारी, गिरफ्तार, गिरफ़्तार, मनी लॉन्ड्रिंग, ड्रग्स, सीबीआई, कस्टम विभाग, कस्टम्स, साइबर पुलिस,
+           क्राइम ब्रांच, वीडियो कॉल, एफआईआर, केस दर्ज, अवैध पार्सल, वारंट]
+      mr: [डिजिटल अरेस्ट, अटक, अटकेचे, मनी लाँड्रिंग, ड्रग्ज, सीबीआय, कस्टम विभाग, सायबर पोलीस, गुन्हे शाखा, व्हिडिओ कॉल,
+           एफआयआर, गुन्हा दाखल, बेकायदेशीर पार्सल, वॉरंट]
+      hinglish: [digital arrest, giraftar, arrest ho jaoge, video call pe raho, case darj]
+
+  investment:
+    label: "Investment / trading tips with guaranteed returns"
+    weight: 35
+    extra_hit_bonus: 5
+    max_bonus: 15
+    keywords:
+      en: [guaranteed returns, guaranteed return, assured returns, double your money, risk free, risk-free, multibagger,
+           sure shot, sureshot, target price, upper circuit, insider tip, insider news, stock tips, trading tips,
+           ipo allotment guaranteed, vip group, premium group, profit daily, daily profit, 100% profit, 200% returns,
+           crypto investment, forex trading, institutional account, block deal, jackpot stock]
+      hi: [गारंटीड रिटर्न, पक्का मुनाफा, पैसा डबल, दोगुना, मल्टीबैगर, शेयर टिप्स, अपर सर्किट, जल्दी खरीदो, अभी खरीदें,
+           टारगेट, निश्चित लाभ, रोज़ मुनाफा, रोज मुनाफा]
+      mr: [हमखास परतावा, खात्रीशीर परतावा, पैसे दुप्पट, दुप्पट, मल्टीबॅगर, शेअर टिप्स, अपर सर्किट, लगेच खरेदी करा, टार्गेट,
+           रोज नफा]
+      hinglish: [paisa double, pakka profit, jaldi kharido, abhi kharido, guaranteed munafa, roz profit, target hit]
+
+  task_job:
+    label: "Task / part-time job offer"
+    weight: 35
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [part time job, part-time job, work from home, earn daily, earn per day, like youtube videos, like videos,
+           rate hotels, google reviews, simple tasks, task based, prepaid task, daily salary, telegram task,
+           earn 5000, earn 3000, earn rs, home based job, data entry job]
+      hi: [पार्ट टाइम जॉब, घर बैठे, घर से काम, रोज कमाएं, रोज़ कमाएं, वीडियो लाइक, टास्क, प्रतिदिन कमाई, रोजाना कमाई]
+      mr: [पार्ट टाइम जॉब, घरबसल्या, घरून काम, रोज कमवा, व्हिडिओ लाईक, टास्क, दररोज कमाई]
+      hinglish: [ghar baithe, ghar baithe kamao, roz kamao, part time kaam, daily kamai, video like karo]
+
+  lottery_prize:
+    label: "Lottery / prize / gift"
+    weight: 35
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [lottery, lucky draw, you have won, you won, congratulations you, prize money, winner, cash prize, gift voucher,
+           claim your prize, processing fee, kbc, crorepati, jackpot, free iphone, scratch card, reward points expire]
+      hi: [लॉटरी, लकी ड्रा, आपने जीता, आप जीत गए, इनाम, विजेता, बधाई हो, कैश प्राइज, केबीसी, करोड़पति, करोडपति,
+           प्रोसेसिंग फीस]
+      mr: [लॉटरी, लकी ड्रॉ, तुम्ही जिंकला, तुम्ही जिंकले, बक्षीस, विजेते, अभिनंदन, कॅश प्राइज, केबीसी, करोडपती,
+           प्रोसेसिंग फी]
+      hinglish: [lottery lagi, inaam, aapne jeeta, jeet gaye, badhai ho]
+
+  fake_customer_care:
+    label: "Fake customer care / refund / remote-access app"
+    weight: 30
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [customer care number, customer care, helpline number, refund, refund process, anydesk, teamviewer,
+           quick support, screen share, rustdesk, download app, remote access, cashback refund, reversal]
+      hi: [कस्टमर केयर, हेल्पलाइन नंबर, रिफंड, एनीडेस्क, स्क्रीन शेयर, ऐप डाउनलोड]
+      mr: [कस्टमर केअर, हेल्पलाइन क्रमांक, रिफंड, परतावा प्रक्रिया, एनीडेस्क, स्क्रीन शेअर, अ‍ॅप डाउनलोड, ॲप डाउनलोड]
+      hinglish: [refund milega, customer care se, app download karo, anydesk download]
+
+  loan_app:
+    label: "Instant loan app"
+    weight: 30
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [instant loan, loan approved, pre-approved loan, preapproved loan, loan without cibil, no cibil, no documents,
+           without documents, loan in 5 minutes, loan app, low interest loan, loan sanctioned, instant cash]
+      hi: [इंस्टेंट लोन, लोन मंजूर, बिना दस्तावेज, बिना सिबिल, तुरंत लोन, लोन ऐप, कर्ज मंजूर]
+      mr: [झटपट कर्ज, कर्ज मंजूर, लोन मंजूर, कागदपत्रांशिवाय, सिबिल शिवाय, लोन अ‍ॅप, लोन ॲप]
+      hinglish: [loan mil jayega, turant loan, bina document, loan approve ho gaya]
+
+  utility_disconnection:
+    label: "Electricity / utility disconnection threat"
+    weight: 40
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [electricity will be disconnected, power will be disconnected, electricity connection, power supply will be cut,
+           electricity bill not updated, last month bill not updated, bill not paid, connection will be cut, disconnected tonight,
+           electricity officer, gas connection will be, disconnection]
+      hi: [बिजली कट, बिजली काट, बिजली कनेक्शन, बिजली बिल, कनेक्शन काट, बिल अपडेट नहीं, बिजली अधिकारी]
+      mr: [वीज कट, वीज खंडित, वीज पुरवठा खंडित, वीज बिल, कनेक्शन कापले, बिल अपडेट नाही, वीज अधिकारी]
+      hinglish: [bijli kat, bijli connection, bill update nahi, light kat jayegi]
+
+  courier_parcel:
+    label: "Courier / parcel / delivery"
+    weight: 35
+    extra_hit_bonus: 5
+    max_bonus: 10
+    keywords:
+      en: [parcel, package is held, package on hold, shipment on hold, delivery failed, incomplete address,
+           update address, redelivery, re-delivery, customs duty, courier, tracking id, delivery attempt, warehouse]
+      hi: [पार्सल, कूरियर, कुरियर, डिलीवरी फेल, पता अधूरा, अधूरे पते, पता अपडेट, कस्टम ड्यूटी]
+      mr: [पार्सल, कुरिअर, डिलिव्हरी अयशस्वी, पत्ता अपूर्ण, अपूर्ण पत्त, पत्ता अपडेट, कस्टम ड्युटी]
+      hinglish: [parcel ruka, address update karo, delivery nahi hui]
+
+signals:
+  threat_feed_url:
+    label: "Link or domain is listed in a public threat feed"
+    weight: 50
+  lookalike_domain:
+    label: "Domain looks like an official brand domain but is not"
+    weight: 35
+  brand_unofficial_contact:
+    label: "Claims to be a brand but uses a non-official link or number"
+    weight: 30
+  shortener:
+    label: "Uses a link shortener that hides the destination"
+    weight: 10
+  new_domain:
+    label: "Domain not seen before in our sources"
+    weight: 5
+  apk_link:
+    label: "Asks you to install an app file (.apk) from outside the app store"
+    weight: 25
+  urgency:
+    label: "Pressure / urgency language"
+    weight: 10
+    keywords:
+      en: [urgent, immediately, within 24 hours, within 2 hours, today itself, tonight, last chance, final notice,
+           act now, hurry, limited time, expires today, or else, otherwise your]
+      hi: [तुरंत, तत्काल, अभी, आज ही, आज रात, 24 घंटे, अंतिम चेतावनी, आखिरी मौका, वरना, नहीं तो, जल्दी]
+      mr: [तातडीने, लगेच, आजच, आज रात्री, 24 तासांत, अंतिम सूचना, शेवटची संधी, अन्यथा, नाहीतर, लवकर]
+      hinglish: [turant, abhi, aaj hi, jaldi, warna, nahi to]
+  upi_payment_request:
+    label: "Asks for payment to a UPI ID"
+    weight: 20
+    keywords:   # payment words that must co-occur with a UPI ID
+      en: [pay, send, transfer, deposit, fee, charges, payment, registration fee, refundable]
+      hi: [भुगतान, भेजें, ट्रांसफर, जमा, फीस, शुल्क, पेमेंट]
+      mr: [भरणा, पाठवा, ट्रान्सफर, जमा, फी, शुल्क, पेमेंट]
+      hinglish: [bhejo, pay karo, jama karo, fees, transfer karo]
+  safe_browsing_hit:
+    label: "Google Safe Browsing lists this URL as unsafe"
+    weight: 50
+  link_request:
+    label: "Scam-pattern message asking you to open a link"
+    weight: 10          # fires only together with a scam category and a non-official link
+  contact_mobile:
+    label: "Asks you to call or message a personal mobile number"
+    weight: 15          # fires only together with a scam category
+    keywords:
+      en: [call, contact, whatsapp, message, sms, dial, reach]
+      hi: [कॉल, संपर्क, फोन, फ़ोन, व्हाट्सएप, मैसेज]
+      mr: [कॉल, संपर्क, फोन, व्हॉट्सॲप, मेसेज]
+      hinglish: [call karo, call kare, contact karo, phone karo]
+  group_invite:
+    label: "Pushes you to join a private Telegram/WhatsApp 'tips' group"
+    weight: 15
+    hosts: [t.me, telegram.me, chat.whatsapp.com, wa.me]
+    keywords:
+      en: [vip group, premium group, join group, join channel, telegram group, whatsapp group]
+      hi: [वीआईपी ग्रुप, ग्रुप जॉइन, ग्रुप जॉईन]
+      mr: [ग्रुप जॉईन, ग्रुप जॉइन]
+      hinglish: [group join karo]
+  sebi_claim_unverified:
+    label: "Claims SEBI registration that is not in our registry list"
+    weight: 20
+    claim_keywords: [sebi registered, sebi reg, sebi regd, sebi approved, सेबी रजिस्टर्ड, सेबी नोंदणीकृत, सेबी पंजीकृत]
+
+# Link shorteners (signal: shortener). Shortened links are never expanded automatically in v0.
+shorteners: [bit.ly, tinyurl.com, is.gd, cutt.ly, rb.gy, shorturl.at, t.ly, tiny.cc, ow.ly, goo.gl, rebrand.ly,
+  bitly.com, shorte.st, v.gd, s.id, t.co, short.link, bl.ink, 1url.in, urlzs.com, tiny.example]
+
+# Domains always treated as known (never "new domain").
+known_domains: [t.me, telegram.me, chat.whatsapp.com, wa.me, google.com, youtube.com, youtu.be, wikipedia.org, gov.in, nic.in, whatsapp.com, telegram.org,
+  facebook.com, instagram.com, x.com, twitter.com, linkedin.com, amazon.in, flipkart.com, rbi.org.in, sebi.gov.in,
+  cybercrime.gov.in, npci.org.in, uidai.gov.in]
+
+# TLDs accepted for scheme-less domains in text ("visit sbi-kyc.in"). Fixtures use .example.
+bare_domain_tlds: [in, com, net, org, info, xyz, top, site, online, shop, live, app, click, link, club, vip, icu, cc,
+  me, io, ly, gl, gd, co, biz, buzz, cyou, store, tech, website, space, fun, pro, sbi, example, test, ru, cn, tk, ml,
+  ga, cf, gq, pw, ws, su, rest, bond, sbs, cfd, lol, help, support, today, life, world, news, gov, edu]
 
 # Hosting / shortener domains: a reported URL on these must not taint the whole domain.
 shared_hosts: [github.io, githubusercontent.com, blogspot.com, google.com, sites.google.com, forms.gle,
@@ -6,3 +212,9 @@ shared_hosts: [github.io, githubusercontent.com, blogspot.com, google.com, sites
   weebly.com, 000webhostapp.com, glitch.me, ngrok.io, ngrok-free.app, azurewebsites.net, cloudfront.net,
   amazonaws.com, appspot.com, wordpress.com, square.site, webflow.io, framer.app, ipfs.io, dweb.link,
   notion.site, telegra.ph, t.me, bit.ly, tinyurl.com, is.gd, cutt.ly, rb.gy, shorturl.at]
+
+tickers:
+  context_words: [stock, stocks, share, shares, nse, bse, buy, sell, target, multibagger, circuit, ipo, intraday,
+    trading, portfolio, शेयर, स्टॉक, शेअर, खरीदो, खरीदें, खरेदी, टारगेट]
+  stoplist: [THE, AND, FOR, NSE, BSE, IPO, SEBI, RBI, KYC, UPI, OTP, PAN, ATM, SMS, URL, APP, NOW, BUY, SELL, CEO,
+    USA, IND, INR, GST, ITR, CBI, FIR, VIP, TRAI, LTD, PVT, HOLD, ALL, NEW, BEST, SURE, SHOT, FREE, TOP]

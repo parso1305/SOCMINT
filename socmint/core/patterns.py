@@ -22,13 +22,13 @@ PAN_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{5}[0-9]{4}[A-Za-z](?![A-Za-z0-9])
 MOBILE_RE = re.compile(r"(?<![\d+])(?:(?:\+|00)?91[\s-]?|0)?([6-9](?:[\s-]?\d){9})(?![\d])")
 
 # Toll-free / premium service numbers: 1800 / 1860 / 1900 + 6-7 digits.
-TOLLFREE_RE = re.compile(r"(?<!\d)(1[89]00|1860)[\s-]?(\d{3})[\s-]?(\d{3,4})(?!\d)")
+TOLLFREE_RE = re.compile(r"(?<!\d)(?:1[89]00|1860)(?:[\s-]?\d){6,7}(?!\d)")
 
 # Landline with STD code: 0 + 2-4 digit code + 6-8 digit number (separator required to limit false positives).
 LANDLINE_RE = re.compile(r"(?<!\d)0[1-9]\d{1,3}[\s-]\d{6,8}(?!\d)")
 
 URL_RE = re.compile(
-    r"(?i)\b((?:https?://|www\.)[^\s<>\"'()\[\]{}]+)",
+    r"(?i)\b((?:https?://|www\.)[^\s<>\"'()\[\]{}।॥]+)",  # stops at Devanagari danda
 )
 # Bare domains such as "sbi-kyc-update.in" (no scheme). Validated with tldextract afterwards.
 BARE_DOMAIN_RE = re.compile(

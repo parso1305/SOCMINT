@@ -77,6 +77,38 @@ def ingest(source: str = typer.Option("all", "--source", "-s", help="Source name
 
 
 @app.command()
+def check(
+    text: str = typer.Argument(None, help="Message text to check."),
+    file: Path = typer.Option(None, "--file", "-f", help="Image / voice note / video / text file."),
+    lang: str = typer.Option(None, "--lang", help="Reply language: en | hi | mr (default: detected)."),
+    as_json: bool = typer.Option(False, "--json", help="Print the full result as JSON."),
+    no_store: bool = typer.Option(False, "--no-store", help="Do not store the submission."),
+) -> None:
+    """Run the tipline pipeline locally on text and/or a file."""
+    from socmint.core.db import init_db
+    from socmint.tipline.pipeline import check as run_check
+
+    if not text and not file:
+        raise typer.BadParameter("give message text or --file")
+    if file and file.suffix.lower() == ".txt" and not text:
+        text, file = file.read_text(encoding="utf-8"), None
+    init_db()
+    res = run_check(text=text, file_path=file, reply_lang=lang, channel="cli", store=not no_store)
+    if as_json:
+        _print_json(res.model_dump(mode="json"))
+        return
+    typer.echo(res.reply_text)
+    typer.echo(f"\n--- evidence (verdict={res.verdict.value}, score={res.score:.0f}, lang={res.lang}, "
+               f"{res.timings_ms.get('total_ms', 0):.0f} ms) ---")
+    for r in res.reasons:
+        typer.echo(f"  [{r.weight:>4.0f}] {r.code}: {json.dumps(r.evidence, ensure_ascii=False, default=str)[:160]}")
+    for i in res.indicators:
+        typer.echo(f"  indicator (suspected): {i.type} {i.value}" + (f" brand={i.linked_brand}" if i.linked_brand else ""))
+    if res.degraded:
+        typer.echo(f"  degraded: {', '.join(res.degraded)}")
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__

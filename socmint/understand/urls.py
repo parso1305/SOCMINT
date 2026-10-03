@@ -10,14 +10,20 @@ import tldextract
 # RFC 2606 / 6761 reserved TLDs used by synthetic fixtures; tldextract does not know them.
 _RESERVED_TLDS = {"example", "test", "invalid", "localhost"}
 
-_extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
+@lru_cache(maxsize=1)
+def _extractor() -> tldextract.TLDExtract:
+    """Offline extractor (bundled PSL) plus `extra_suffixes` from brands.yaml (e.g. RBI's bank.in)."""
+    from socmint.core.settings import load_config
+
+    extra = list(load_config("brands").get("extra_suffixes", []) or [])
+    return tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None, extra_suffixes=extra)
 
 
 @lru_cache(maxsize=4096)
 def split_domain(host: str) -> tuple[str, str, str]:
     """(subdomain, domain, suffix). Handles reserved test TLDs such as `.example`."""
     host = (host or "").lower().strip(".")
-    ext = _extract(host)
+    ext = _extractor()(host)
     if not ext.suffix:
         parts = host.split(".")
         if len(parts) >= 2 and parts[-1] in _RESERVED_TLDS:

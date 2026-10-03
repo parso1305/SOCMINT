@@ -1,8 +1,15 @@
 # Brands monitored for impersonation.
-# official_domains: registrable domains the brand actually uses (verified live before adding).
-# support_numbers: official customer-care numbers (anything else claiming to be the brand is suspicious).
-# aliases: spellings per language, including Hindi/Marathi (Devanagari) and Hinglish.
-# lookalike_keywords: strings used for crt.sh and "contains brand keyword" lookalike checks.
+#
+# official_domains: registrable domains the brand actually uses. Each was verified on 2026-10-03 by DNS
+#   resolution + HTTPS (redirect targets noted). Banks moved to RBI's `.bank.in` space in 2025.
+# support_numbers: ONLY numbers seen on the brand's own official page (URL in `verified_from`).
+#   Empty list = could not verify (page is JS-rendered); add numbers by hand after checking the site.
+# aliases: spellings per language incl. Devanagari (hi/mr) and Hinglish.
+# lookalike_keywords: >=5-char strings for "domain contains brand keyword" checks (short ones like
+#   "sbi" would match far too many unrelated domains).
+# dnstwist: run dnstwist permutations + DNS resolution for `dnstwist_domains`.
+
+extra_suffixes: [bank.in, fin.in]   # RBI-run suffixes missing from tldextract's bundled list
 
 brands:
   - key: demobank
@@ -17,3 +24,107 @@ brands:
       mr: [डेमोबँक, डेमो बँक]
     lookalike_keywords: [demobank]
     dnstwist: false   # fictional .example domain: lookalikes come from fixtures
+
+  - key: sbi
+    name: State Bank of India
+    official_domains: [sbi.co.in, sbi.bank.in, onlinesbi.sbi, sbi]
+    support_numbers: ["1800 11 2211", "1800 425 3800", "1800 11 1109"]
+    verified_from: https://sbi.bank.in/web/customer-care/contact-us
+    aliases:
+      en: [sbi, state bank of india, state bank, yono sbi, yono]
+      hi: [एसबीआई, स्टेट बैंक, भारतीय स्टेट बैंक]
+      mr: [एसबीआय, स्टेट बँक]
+    lookalike_keywords: [onlinesbi, yonosbi, sbiyono, sbionline, sbi-kyc]
+    dnstwist: true
+    dnstwist_domains: [sbi.co.in, onlinesbi.sbi]
+
+  - key: hdfcbank
+    name: HDFC Bank
+    official_domains: [hdfcbank.com, hdfc.bank.in]
+    support_numbers: []   # contact page is JS-rendered; not verified
+    verified_from: https://www.hdfc.bank.in/
+    aliases:
+      en: [hdfc, hdfc bank]
+      hi: [एचडीएफसी, एचडीएफसी बैंक]
+      mr: [एचडीएफसी, एचडीएफसी बँक]
+    lookalike_keywords: [hdfcbank, hdfc-bank, hdfcnetbank]
+    dnstwist: true
+    dnstwist_domains: [hdfcbank.com]
+
+  - key: icicibank
+    name: ICICI Bank
+    official_domains: [icicibank.com, icici.bank.in]
+    support_numbers: []   # only a +91-22 landline was visible; toll-free not verified
+    verified_from: https://www.icici.bank.in/contact-us
+    aliases:
+      en: [icici, icici bank]
+      hi: [आईसीआईसीआई, आईसीआईसीआई बैंक]
+      mr: [आयसीआयसीआय, आयसीआयसीआय बँक]
+    lookalike_keywords: [icicibank, icici-bank, icicinet]
+    dnstwist: true
+    dnstwist_domains: [icicibank.com]
+
+  - key: paytm
+    name: Paytm
+    official_domains: [paytm.com]
+    support_numbers: []   # care page is JS-rendered; not verified
+    verified_from: https://paytm.com/care
+    aliases:
+      en: [paytm, pay tm]
+      hi: [पेटीएम]
+      mr: [पेटीएम]
+    lookalike_keywords: [paytm]
+    dnstwist: true
+    dnstwist_domains: [paytm.com]
+
+  - key: phonepe
+    name: PhonePe
+    official_domains: [phonepe.com]
+    support_numbers: ["080-68727374", "022-68727374"]
+    verified_from: https://www.phonepe.com/contact-us/
+    aliases:
+      en: [phonepe, phone pe]
+      hi: [फोनपे, फ़ोनपे]
+      mr: [फोनपे]
+    lookalike_keywords: [phonepe]
+    dnstwist: true
+    dnstwist_domains: [phonepe.com]
+
+  - key: indiapost
+    name: India Post
+    official_domains: [indiapost.gov.in]
+    support_numbers: ["1800 266 6868"]
+    verified_from: https://www.indiapost.gov.in/
+    aliases:
+      en: [india post, indiapost, speed post, post office, indian post]
+      hi: [इंडिया पोस्ट, भारतीय डाक, डाक विभाग, स्पीड पोस्ट]
+      mr: [इंडिया पोस्ट, भारतीय टपाल, टपाल विभाग, स्पीड पोस्ट]
+    lookalike_keywords: [indiapost, india-post, indiapost-, speedpost]
+    dnstwist: true
+    dnstwist_domains: [indiapost.gov.in]
+
+  - key: msedcl
+    name: MSEDCL (Mahavitaran)
+    official_domains: [mahadiscom.in]
+    support_numbers: ["1912", "1800 233 3435", "1800 212 3435"]
+    verified_from: https://www.mahadiscom.in/en/contact-us/
+    aliases:
+      en: [msedcl, mahavitaran, mahadiscom, maha vitaran, mseb]
+      hi: [महावितरण, एमएसईडीसीएल, बिजली विभाग]
+      mr: [महावितरण, एमएसईडीसीएल, वीज वितरण, एमएसईबी]
+    lookalike_keywords: [mahadiscom, mahavitaran, msedcl]
+    dnstwist: true
+    dnstwist_domains: [mahadiscom.in]
+
+  - key: incometax
+    name: Income Tax Department
+    official_domains: [incometax.gov.in, incometaxindia.gov.in]
+    support_numbers: ["1800 103 0025", "1800 103 0344", "1800 103 4215"]
+    verified_from: https://www.incometax.gov.in/iec/foportal/contact-us
+    aliases:
+      en: [income tax, income tax department, itr refund, income tax refund]
+      hi: [आयकर विभाग, इनकम टैक्स, आयकर रिफंड]
+      mr: [आयकर विभाग, इन्कम टॅक्स]
+    lookalike_keywords: [incometax, income-tax, itrefund]
+    dnstwist: true
+    dnstwist_domains: [incometax.gov.in]
