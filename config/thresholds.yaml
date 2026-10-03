@@ -1,0 +1,64 @@
+# All tunable thresholds and weights. No analysis module hard-codes these values.
+
+scam:
+  likely: 70        # score >= likely  -> "likely scam"
+  suspicious: 40    # score >= suspicious -> "suspicious"
+  max_score: 100
+
+claim_match:
+  top_k: 3
+  e5: 0.80          # cosine threshold for multilingual-e5 (calibrated on fixtures, see DECISIONS.md)
+  tfidf: 0.45       # cosine threshold for the TF-IDF char n-gram fallback
+
+media:
+  phash_max_distance: 8
+  video_keyframe_every_s: 5
+  video_max_frames: 30
+
+narratives:
+  window_days: 14
+  min_cluster_size: 5
+  min_samples: 2
+  growth_alert: 2.0          # last-24h count / previous-72h daily average
+  min_count_24h: 4
+  factcheck_link_e5: 0.82
+  factcheck_link_tfidf: 0.35
+  keywords_per_cluster: 8
+
+coordination:
+  jaccard: 0.8
+  num_perm: 128
+  shingle_words: 3
+  sync_window_minutes: 10
+  min_group_size: 3
+  min_accounts: 3
+  alert_score: 0.6
+  weights:            # weighted combination -> score in [0,1]
+    accounts: 0.35    # distinct accounts (saturates at accounts_saturation)
+    synchrony: 0.35   # share of posts within sync window of the group median
+    channels: 0.15    # channel diversity
+    burst: 0.15       # 1 - time_span / burst_reference
+  accounts_saturation: 10
+  burst_reference_minutes: 360
+
+market:
+  baseline_days: 30
+  min_baseline_days: 10
+  mention_z: 3.0
+  volume_z: 3.0
+  min_mentions: 5
+  weights:
+    base: 50
+    small_cap: 15
+    promo_language: 15
+    sebi_claim_unverified: 15
+    price_jump: 5
+  price_jump_pct: 10
+  small_cap_turnover_inr: 50000000   # avg daily turnover below this = illiquid proxy (5 crore)
+
+ingest:
+  default_rate_limit_s: 2.0
+  http_timeout_s: 20
+  http_retries: 3
+  cache_ttl_s: 3600
+  max_summary_chars: 400

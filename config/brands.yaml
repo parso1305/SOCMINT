@@ -1,0 +1,19 @@
+# Brands monitored for impersonation.
+# official_domains: registrable domains the brand actually uses (verified live before adding).
+# support_numbers: official customer-care numbers (anything else claiming to be the brand is suspicious).
+# aliases: spellings per language, including Hindi/Marathi (Devanagari) and Hinglish.
+# lookalike_keywords: strings used for crt.sh and "contains brand keyword" lookalike checks.
+
+brands:
+  - key: demobank
+    name: DemoBank (fictional)
+    synthetic: true
+    official_domains: [demobank.example]
+    official_handles: ["@DemoBankOfficial"]
+    support_numbers: ["1800 000 0000"]
+    aliases:
+      en: [demobank, demo bank]
+      hi: [डेमोबैंक, डेमो बैंक]
+      mr: [डेमोबँक, डेमो बँक]
+    lookalike_keywords: [demobank]
+    dnstwist: false   # fictional .example domain: lookalikes come from fixtures
