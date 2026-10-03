@@ -1,0 +1,7 @@
+# Manually maintained extract of SEBI's registered intermediaries (RA = Research Analyst, IA = Investment Adviser).
+# Source: https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes&intmId=14 (RA) and intmId=13 (IA)
+# Add rows by looking up a registration number on the SEBI site; record the date you checked it.
+# Rows marked synthetic are fictional demo entries (INH999... / INA999... are not real numbers).
+reg_no,name,type,valid_until,checked_on,synthetic
+INH999000001,Demo Research Analyst (fictional),RA,2030-12-31,2026-10-03,true
+INA999000001,Demo Investment Adviser (fictional),IA,2030-12-31,2026-10-03,true

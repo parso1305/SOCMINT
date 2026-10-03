@@ -60,6 +60,23 @@ def init_db_cmd() -> None:
 
 
 @app.command()
+def ingest(source: str = typer.Option("all", "--source", "-s", help="Source name from sources.yaml, or 'all'.")) -> None:
+    """Run ingestion sources (failing sources are logged and skipped)."""
+    from socmint.core.db import init_db
+    from socmint.ingest.runner import run_sources
+
+    init_db()
+    results = run_sources(source)
+    for r in results:
+        new = r.get("new") or {}
+        new_txt = ", ".join(f"{k}={v}" for k, v in new.items() if v) or "-"
+        typer.echo(f"{r['source']:<22} {r['status']:<18} fetched={r.get('fetched', 0):<5} new: {new_txt}"
+                   + (f"  ({r['detail'][:110]})" if r.get("detail") else ""))
+    ok = sum(r["status"] == "ok" for r in results)
+    typer.echo(f"\n{ok}/{len(results)} sources ok")
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__

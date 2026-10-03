@@ -1,2 +1,109 @@
-# Every data source. Filled in and verified in M1.
-sources: []
+# Every data source. Each URL below was verified with a live request on 2026-10-03 (see SOURCES.md).
+# enabled:false + disabled_reason => the runner logs a warning and moves on.
+# Key-gated sources are enabled here but auto-skip ("missing_key") until the key is in .env.
+
+sources:
+  # ---------------- Fact-checkers (RSS, zero-key) ----------------
+  - {name: altnews_en, type: rss, kind: factcheck, publisher: Alt News, lang: en, url: "https://www.altnews.in/feed/", hash_images: true, max_images: 10}
+  - {name: altnews_hi, type: rss, kind: factcheck, publisher: Alt News Hindi, lang: hi, url: "https://www.altnews.in/hindi/feed/", hash_images: true, max_images: 10}
+  - {name: factly_en, type: rss, kind: factcheck, publisher: Factly, lang: en, url: "https://factly.in/feed/", hash_images: true, max_images: 10}
+  - {name: vishvas_hi, type: rss, kind: factcheck, publisher: Vishvas News, lang: hi, url: "https://www.vishvasnews.com/feed/", hash_images: true, max_images: 10}
+  - {name: vishvas_en, type: rss, kind: factcheck, publisher: Vishvas News, lang: en, url: "https://www.vishvasnews.com/english/feed/", hash_images: true, max_images: 10}
+  - {name: vishvas_mr, type: rss, kind: factcheck, publisher: Vishvas News Marathi, lang: mr, url: "https://www.vishvasnews.com/marathi/feed/", hash_images: true, max_images: 10}
+  - {name: newschecker_en, type: rss, kind: factcheck, publisher: Newschecker, lang: en, url: "https://newschecker.in/feed/", hash_images: true, max_images: 10}
+  - {name: newschecker_hi, type: rss, kind: factcheck, publisher: Newschecker Hindi, lang: hi, url: "https://newschecker.in/hi/feed/", hash_images: true, max_images: 10}
+  - {name: newschecker_mr, type: rss, kind: factcheck, publisher: Newschecker Marathi, lang: mr, url: "https://newschecker.in/mr/feed/", hash_images: true, max_images: 10}
+  - name: boomlive
+    type: rss
+    kind: factcheck
+    publisher: BOOM
+    lang: en
+    url: "https://www.boomlive.in/feeds/fact-check"
+    enabled: false
+    disabled_reason: "HTTP 403 to a non-browser User-Agent (bot protection). Not bypassed. Re-test or ask BOOM for feed access."
+  - name: indiatoday_factcheck
+    type: rss
+    kind: factcheck
+    publisher: India Today Fact Check
+    lang: en
+    url: ""
+    enabled: false
+    disabled_reason: "No working fact-check RSS found: /rss/fact-check 404; section id 1800975 is the NewsMo video feed, not fact checks."
+
+  # ---------------- News RSS (zero-key) ----------------
+  - {name: thehindu_national, type: rss, kind: news, publisher: The Hindu, lang: en, url: "https://www.thehindu.com/news/national/feeder/default.rss"}
+  - {name: indianexpress_india, type: rss, kind: news, publisher: Indian Express, lang: en, url: "https://indianexpress.com/section/india/feed/"}
+  - {name: ndtv_india, type: rss, kind: news, publisher: NDTV, lang: en, url: "https://feeds.feedburner.com/ndtvnews-india-news"}
+  - {name: hindustantimes_india, type: rss, kind: news, publisher: Hindustan Times, lang: en, url: "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml"}
+  - {name: bbc_hindi, type: rss, kind: news, publisher: BBC Hindi, lang: hi, url: "https://feeds.bbci.co.uk/hindi/rss.xml"}
+  - {name: amarujala_india, type: rss, kind: news, publisher: Amar Ujala, lang: hi, url: "https://www.amarujala.com/rss/india-news.xml"}
+  - {name: bbc_marathi, type: rss, kind: news, publisher: BBC Marathi, lang: mr, url: "https://feeds.bbci.co.uk/marathi/rss.xml"}
+
+  # ---------------- GDELT DOC 2.0 (zero-key) ----------------
+  - name: gdelt_india
+    type: gdelt
+    rate_limit_s: 10         # GDELT asks for at most one request every 5 seconds; it penalises bursts per IP
+    timespan: 1d
+    maxrecords: 75
+    queries:
+      - '"fact check" sourcecountry:IN'
+      - '(misinformation OR "fake news" OR "viral video") sourcecountry:IN'
+      - '("digital arrest" OR "cyber fraud" OR "online scam") sourcecountry:IN'
+      - '("pump and dump" OR "stock tips" OR SEBI) sourcecountry:IN'
+
+  # ---------------- Threat feeds ----------------
+  - name: openphish
+    type: openphish
+    url: "https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt"
+    notes: "Official community feed (linked from openphish.com/phishing_feeds.html). Terms: non-commercial use only."
+  - name: urlhaus
+    type: urlhaus
+    url_template: "https://urlhaus-api.abuse.ch/v2/files/exports/{key}/recent.csv"
+    notes: "abuse.ch terms now require a free Auth-Key for dataset downloads; auto-enabled when URLHAUS_AUTH_KEY is set."
+
+  # ---------------- Certificate Transparency ----------------
+  - name: crtsh
+    type: crtsh
+    enabled: false
+    disabled_reason: "crt.sh robots.txt is 'Disallow: /' for all agents (checked 2026-10-03). Respected; dnstwist covers lookalikes."
+
+  # ---------------- NSE / SEBI (zero-key) ----------------
+  - name: nse_symbols
+    type: nse_symbols
+    url: "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+    large_cap_url: "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv"
+    rate_limit_s: 3
+  - name: nse_bhavcopy
+    type: nse_bhavcopy
+    url_template: "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip"
+    backfill_days: 45
+    series: [EQ, BE, BZ, SM, ST]
+    rate_limit_s: 3
+  - name: sebi_registered
+    type: sebi_manual
+    notes: "SEBI's RA/IA register is a paginated HTML listing with no bulk download; manual CSV in config/sebi_registered.csv."
+
+  # ---------------- Free-key sources (auto-skip until key present) ----------------
+  - name: google_factcheck
+    type: google_factcheck
+    languages: [en, hi, mr]
+    max_age_days: 30
+    queries: [India, WhatsApp, viral, scam, vaccine, election, RBI, SEBI]
+  - name: youtube_keywords
+    type: youtube
+    region: IN
+    max_results: 25
+    comments_per_video: 20
+    max_units_per_run: 1500
+    # PROPOSED - awaiting your approval
+    keywords: ["multibagger stock", "sure shot stock tips", "digital arrest", "part time job work from home", "KYC update"]
+  - name: reddit_india
+    type: reddit
+    limit: 100
+    # PROPOSED - awaiting your approval
+    subreddits: [india, IndianStockMarket, IndiaInvestments, mumbai, pune, delhi]
+  - name: telegram_public
+    type: telegram_channels
+    limit_per_channel: 200
+    rate_limit_s: 3
+    channels: []   # add public channel usernames you approve

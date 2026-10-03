@@ -234,6 +234,19 @@ class MarketDaily(Base):
     synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class Symbol(Base):
+    """Listed equity symbols (NSE EQUITY_L.csv) used for ticker extraction and liquidity flags."""
+
+    __tablename__ = "symbols"
+    symbol: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(300), default="")
+    series: Mapped[str] = mapped_column(String(10), default="")
+    isin: Mapped[str] = mapped_column(String(20), default="")
+    large_cap: Mapped[bool] = mapped_column(Boolean, default=False)  # member of the configured large-cap index
+    source: Mapped[str] = mapped_column(String(50), default="")
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class Preference(Base):
     """Per-sender preferences (reply language), keyed by sender_hash only."""
 

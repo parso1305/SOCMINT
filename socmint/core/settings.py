@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     reddit_client_id: str = Field(default="", alias="REDDIT_CLIENT_ID")
     reddit_client_secret: str = Field(default="", alias="REDDIT_CLIENT_SECRET")
     google_safe_browsing_key: str = Field(default="", alias="GOOGLE_SAFE_BROWSING_KEY")
+    urlhaus_auth_key: str = Field(default="", alias="URLHAUS_AUTH_KEY")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

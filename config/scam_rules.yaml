@@ -1,0 +1,8 @@
+# Scam scoring rules (filled in M2). Editable without code changes.
+
+# Hosting / shortener domains: a reported URL on these must not taint the whole domain.
+shared_hosts: [github.io, githubusercontent.com, blogspot.com, google.com, sites.google.com, forms.gle,
+  firebaseapp.com, web.app, pages.dev, workers.dev, vercel.app, netlify.app, herokuapp.com, wixsite.com,
+  weebly.com, 000webhostapp.com, glitch.me, ngrok.io, ngrok-free.app, azurewebsites.net, cloudfront.net,
+  amazonaws.com, appspot.com, wordpress.com, square.site, webflow.io, framer.app, ipfs.io, dweb.link,
+  notion.site, telegra.ph, t.me, bit.ly, tinyurl.com, is.gd, cutt.ly, rb.gy, shorturl.at]
