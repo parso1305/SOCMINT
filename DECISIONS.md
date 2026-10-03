@@ -73,3 +73,10 @@ Choices made without asking (as permitted by the build prompt), with the reasoni
   Score = 0.35·accounts (saturating at 10) + 0.35·synchrony (share within ±10 min of the median) + 0.15·channel diversity + 0.15·burstiness. Alert at ≥0.6 (high at ≥0.8).
   Demo set: 0.928. Organic control (same text over 3 days): 0.372.
 - Coordination runs only on `telegram/reddit/youtube` items with an author handle. All of those sources need keys, so on real data it currently has nothing to analyse.
+
+## Market risk (M6)
+- Mentions per symbol per **UTC day**, counted from all items (ticker extraction needs `$SYM`/`#SYM`, or a listed symbol in capitals next to a stock context word).
+- z-scores against the previous 30 trading days (at least 10 required). Volume is z-scored on log(1+volume). Std floors (`min_std_mentions: 1`, `min_std_log_volume: 0.05`) keep a quiet all-zero baseline from producing absurd z values.
+- Flag when mention_z ≥ 3 **and** volume_z ≥ 3 **and** mentions ≥ 5. Risk score = 50 base + 15 small/illiquid (not NIFTY 100 and average turnover below ₹5 crore) + 15 promotional language (at least 30% of posts hit the investment-scam keywords) + 15 unverified SEBI claim (number not in the registry CSV, or a claim with no number) + 5 price move of 10% or more.
+- **No recommendations**: alert title, summary and disclaimer come from fixed neutral templates. Promoter posts are kept only under `quoted_posts`. A test asserts generated text never contains buy/sell/hold/target/prediction wording (en/hi/mr).
+- Real-data note: news RSS headlines almost never contain tickers, so live alerts need the key-gated Telegram/Reddit/YouTube sources.

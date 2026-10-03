@@ -201,9 +201,12 @@ def demo_items(now=None) -> list[dict[str, Any]]:
         if rnd.random() < 0.5:
             add("DEMOLARGE share price steady this week, NSE update", now - timedelta(days=d, hours=2), "r/demo_stocks",
                 f"acct_{rnd.randint(1, 60):02d}", "reddit", "mkt_base_large")
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    since_midnight = max((now - day_start).total_seconds(), 600.0)  # spike stays inside today's (UTC) market day
     for i in range(40):
         ch = rnd.choice(["demo_tips_tg", "demo_alerts_tg", "demo_yt_comments"])
-        add(_PUMP_PROMO[i % 5] + ("" if i < 5 else f" #{i}"), now - timedelta(hours=rnd.uniform(0.2, 12)), ch,
+        when = day_start + timedelta(seconds=since_midnight * rnd.uniform(0.02, 0.98))
+        add(_PUMP_PROMO[i % 5] + ("" if i < 5 else f" #{i}"), when, ch,
             f"promo_{rnd.randint(1, 25):02d}", types.get(ch, "telegram"), "mkt_spike")
     return items
 

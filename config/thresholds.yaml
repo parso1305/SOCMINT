@@ -58,6 +58,8 @@ market:
   mention_z: 3.0
   volume_z: 3.0
   min_mentions: 5
+  min_std_mentions: 1.0      # std floor so a quiet baseline (all zeros) does not explode z
+  min_std_log_volume: 0.05
   weights:
     base: 50
     small_cap: 15
