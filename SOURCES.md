@@ -50,7 +50,10 @@ Loksatta / Lokmat (the feed URLs tried redirect to HTML pages).
 (see sources.yaml). Stores article title, URL, domain and language only. GDELT asks for **≤1 request
 per 5 s** and penalises bursts per IP. The query format was verified live (HTTP 200), but our first run
 hit HTTP 429 and the IP stayed throttled for a while. Spacing is now 10 s and robots.txt
-fetches are rate-limited too. **Status: live (endpoint verified); see `socmint ingest` output for current state.**
+fetches are rate-limited too. **Status: endpoint verified working (HTTP 200 on 2026-10-03), but this IP has
+been throttled (HTTP 429) for over 2 hours since that first burst, even for single requests.** The source stays
+enabled and fails cleanly; it should recover once GDELT lifts the penalty. If it doesn't, write to the address
+in GDELT's 429 message, or switch to their bulk files.
 
 ## Threat feeds
 | Name | Access | Status | Terms |
