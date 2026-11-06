@@ -141,3 +141,23 @@ def test_posts_table_puts_text_and_categories_first(showcase_db, monkeypatch):
     assert "id" not in shown.proto.column_order and list(shown.proto.column_order)[3] == "text"
     detail = "\n".join(m.value for m in at.markdown)
     assert "Evidence:" in detail  # each label's evidence is shown in the post detail
+
+
+def test_posts_over_time_bucket_follows_the_span():
+    """P8 (B3): hourly under 48 h, 6-hourly up to 7 days, daily beyond; the bucket is named for the chart."""
+    from datetime import datetime, timedelta
+
+    from socmint.showcase import data
+
+    def frame(hours: int, step: int = 1):
+        t0 = datetime(2026, 11, 1)
+        rows = [{"hour": t0 + timedelta(hours=h), "platform": "bluesky", "posts": 2} for h in range(0, hours, step)]
+        return data.posts_over_time({"summary": {"by_hour": rows}})
+
+    df, label = frame(30)
+    assert label == "hour" and len(df) == 30
+    df, label = frame(5 * 24)  # the demo event spans about 5 days
+    assert label == "6 hours" and len(df) == 20 and df["bluesky"].max() == 12
+    df, label = frame(29 * 24, step=5)
+    assert label == "day" and len(df) == 29
+    assert data.posts_over_time({"summary": {"by_hour": []}})[0].empty

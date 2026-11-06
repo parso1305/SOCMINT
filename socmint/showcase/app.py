@@ -93,12 +93,12 @@ ov, posts_tab, people, network, evidence = st.tabs(
 with ov:
     left, right = st.columns([3, 2])
     with left:
-        st.subheader("Posts over time, by platform")
-        ts = data.posts_over_time(d)
+        ts, bucket = data.posts_over_time(d)
+        st.subheader(f"Posts per {bucket}, by platform")
         if ts.empty:
             st.info("No posts yet.")
         else:
-            st.area_chart(ts)
+            st.bar_chart(ts, x_label=f"time (UTC), one bar per {bucket}", y_label="posts")
     with right:
         st.subheader("Key findings")
         findings = data.key_findings(d)

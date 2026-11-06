@@ -84,15 +84,24 @@ def key_findings(d: dict[str, Any], n: int = 5) -> list[str]:
 
 
 # ------------------------------------------------------------------------------------------- frames
-def posts_over_time(d: dict[str, Any]) -> pd.DataFrame:
+_BUCKETS = ((48, "h", "hour"), (24 * 7, "6h", "6 hours"))  # (span up to, pandas frequency, label); else daily
+
+
+def posts_over_time(d: dict[str, Any]) -> tuple[pd.DataFrame, str]:
+    """Posts per time bucket and platform, with the bucket's name. The bucket follows the span of the posts:
+    hourly under 48 h, 6-hourly up to 7 days, daily beyond (so a few days of posts are not 1-4 per bar)."""
     rows = d["summary"]["by_hour"]
     if not rows:
-        return pd.DataFrame()
+        return pd.DataFrame(), "hour"
     df = pd.DataFrame(rows)
+    df["hour"] = pd.to_datetime(df["hour"])
     span_h = (df["hour"].max() - df["hour"].min()).total_seconds() / 3600
-    if span_h > 24 * 10:  # long windows read better per day
-        df["hour"] = df["hour"].dt.floor("D")
-    return df.pivot_table(index="hour", columns="platform", values="posts", aggfunc="sum", fill_value=0)
+    freq, label = next(((f, lab) for limit, f, lab in _BUCKETS if span_h < limit), ("D", "day"))
+    df["bucket"] = df["hour"].dt.floor(freq)
+    out = df.pivot_table(index="bucket", columns="platform", values="posts", aggfunc="sum", fill_value=0)
+    out = out.reindex(pd.date_range(out.index.min(), out.index.max(), freq=freq), fill_value=0)
+    out.index.name = "time (UTC)"
+    return out, label
 
 
 def counts_frame(counts: dict[str, int], label: str) -> pd.DataFrame:
