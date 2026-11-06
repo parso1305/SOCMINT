@@ -48,8 +48,10 @@ class E5Embedder:
     def __init__(self, model_name: str):
         from sentence_transformers import SentenceTransformer
 
+        from socmint.core.hf import resolve
+
         self.name = f"e5:{model_name}"
-        self._model = SentenceTransformer(model_name, device="cpu")
+        self._model = SentenceTransformer(resolve(model_name), device="cpu")  # cached copy: no Hub request
         self._lock = threading.Lock()
 
     def fit(self, corpus: list[str]) -> None:  # noqa: D401 - nothing to fit

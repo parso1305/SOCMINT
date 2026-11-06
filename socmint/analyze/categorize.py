@@ -220,7 +220,10 @@ def _zero_shot_pipeline():  # noqa: ANN202
     except ImportError as e:
         raise ZeroShotUnavailable("transformers not installed (install the [ml] extra)") from e
     try:
-        return pipeline("zero-shot-classification", model=str(threshold("categorize.zero_shot_model")), device=-1)
+        from socmint.core.hf import resolve
+
+        return pipeline("zero-shot-classification", model=resolve(str(threshold("categorize.zero_shot_model"))),
+                        device=-1)
     except Exception as e:  # noqa: BLE001  (no network for the first download, disk, ...)
         raise ZeroShotUnavailable(f"zero-shot model unavailable: {type(e).__name__}: {e}"[:300]) from e
 

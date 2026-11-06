@@ -20,7 +20,16 @@ def _model():
 
     if os.environ.get("SOCMINT_OFFLINE"):
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    return WhisperModel(get_settings().whisper_model, device="cpu", compute_type="int8")
+    from faster_whisper.utils import download_model
+
+    name = get_settings().whisper_model
+    try:  # cached copy: no Hub request
+        path = download_model(name, local_files_only=True)
+        log.info("hf_model_from_cache", extra={"model": name})
+    except Exception:  # noqa: BLE001  (not cached yet)
+        path = name
+        log.info("hf_model_download", extra={"model": name})
+    return WhisperModel(path, device="cpu", compute_type="int8")
 
 
 def asr_status() -> tuple[bool, str]:
