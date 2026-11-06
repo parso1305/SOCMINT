@@ -1,8 +1,11 @@
 # Verification of M9–M16 in the real app (2026-11-06)
 
 Every check was run once **before** any fix (the "before" state), then again **after** all fixes. Live checks used a
-separate `data/verify.db` (`SOCMINT_DB_URL=sqlite:///C:/Project/SOCMINT/data/verify.db`); `data/socmint.db` was never
-touched (SHA-256 identical before and after). Browser checks drove headless Chrome over the DevTools protocol at
+separate `data/verify.db` (`SOCMINT_DB_URL=sqlite:///C:/Project/SOCMINT/data/verify.db`). One slip: for E3 the API was
+first started without `SOCMINT_DB_URL`, and its start-up `init_db()` migrated the main DB's schema into
+`data/socmint.db-wal` (7 new empty tables and new nullable columns; no rows changed) before it was stopped. E3/E4 were
+then run against a copy of `data/demo.db`. The WAL, which did not exist before this session, was removed at the end, so
+`data/socmint.db` is back to its original state (SHA-256 `9126e931…` before and after, no WAL). Browser checks drove headless Chrome over the DevTools protocol at
 1366 × 900 (screenshots, page text, clicks, downloads); form and filter checks used Streamlit's AppTest on a copy of
 `data/demo.db`. Environment: Windows 11, Python 3.12 venv with the `[ml]` extra (e5 embedder), Tesseract not installed.
 
