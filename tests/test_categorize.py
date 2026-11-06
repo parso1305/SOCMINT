@@ -122,3 +122,11 @@ def test_investigation_terms_do_not_count_toward_a_category():
     assert civic.evidence["matched_investigation_term"] == ["flood"]
     # without investigation terms (global / tipline categorisation) nothing changes
     assert rule_labels("Pune flood: the Demosagar dam looks scary today")[0].label == "civic_safety"
+
+
+def test_marathi_contact_is_not_a_strike():
+    """Found in verification: "संप" (strike) matched inside "संपर्क" (contact), labelling helpline posts as protests."""
+    labs = rule_labels("अधिक माहितीसाठी या क्रमांकावर संपर्क साधा")
+    assert all(lab.sublabel != "protest" for lab in labs), [(lab.label, lab.sublabel, lab.evidence) for lab in labs]
+    strike = rule_labels("एसटी कर्मचाऱ्यांचा संप सुरू, बस सेवा ठप्प")
+    assert any(lab.label == "civic_safety" and lab.sublabel == "protest" for lab in strike)
