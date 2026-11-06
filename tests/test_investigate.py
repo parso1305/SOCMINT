@@ -241,3 +241,10 @@ def test_no_narrative_growth_alerts_without_a_collection_baseline():
             run.started_at -= timedelta(hours=80)  # pretend it has been collecting for more than 72 h
     res = runner.analyze(iid, modules=("narratives",))["modules"]["narratives"]["result"]
     assert res["alerts"] >= 1 and "note" not in res
+
+
+def test_baseline_note_keeps_the_module_note():
+    """Found in verification: with too few posts, "not enough items" was overwritten by the baseline note."""
+    iid = runner.create(event_cfg(sources=["bluesky"]))
+    res = runner.analyze(iid, modules=("narratives",))["modules"]["narratives"]["result"]
+    assert "not enough items in window" in res["note"] and "growth alerts held back" in res["note"]

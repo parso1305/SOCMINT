@@ -400,8 +400,9 @@ def analyze(ref: int | str, modules: tuple[str, ...] = ("narratives", "coordinat
             kw = {"growth_alerts": history_h >= need_h} if m == "narratives" else {}
             res = fns[m](item_ids=ids, investigation_id=inv.id, **kw)
             if kw and not kw["growth_alerts"]:
-                res["note"] = (f"growth alerts held back: {history_h:.0f} h of collected history, a baseline needs "
-                               f"{need_h:.0f} h (narratives.min_baseline_hours)")
+                held = (f"growth alerts held back: {history_h:.0f} h of collected history, a baseline needs "
+                        f"{need_h:.0f} h (narratives.min_baseline_hours)")
+                res["note"] = f"{res['note']}; {held}" if res.get("note") else held
                 log.info("narrative_growth_alerts_held_back", extra={"investigation_id": inv.id,
                                                                      "history_hours": round(history_h, 1)})
             out["modules"][m] = {"status": "ok", "result": res, "seconds": round(time.monotonic() - t0, 1)}
