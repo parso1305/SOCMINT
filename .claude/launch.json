@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "showcase-demo",
+      "runtimeExecutable": ".venv/Scripts/socmint.exe",
+      "runtimeArgs": ["showcase", "--demo"],
+      "port": 8502
+    },
+    {
+      "name": "dashboard-demo",
+      "runtimeExecutable": ".venv/Scripts/socmint.exe",
+      "runtimeArgs": ["dashboard", "--demo"],
+      "port": 8501
+    }
+  ]
+}
