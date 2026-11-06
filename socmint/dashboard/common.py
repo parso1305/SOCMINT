@@ -50,8 +50,11 @@ def alerts_section(module: str, limit: int = 200) -> None:
     with session_scope() as s:
         rows = s.scalars(select(Alert).where(Alert.module == module).order_by(desc(Alert.created_at)).limit(limit)).all()
         data = [{"id": a.id, "severity": a.severity, "title": a.title, "created": a.created_at, "status": a.status,
-                 "synthetic": a.synthetic, "_evidence": a.evidence} for a in rows]
+                 "synthetic": a.synthetic, "investigation": (a.evidence or {}).get("investigation_id"),
+                 "_evidence": a.evidence} for a in rows]
     st.subheader(f"Alerts ({len(data)})")
+    if any(d["investigation"] for d in data):
+        st.caption("Alerts with an `investigation` number come from that investigation's scoped analysis.")
     sev = st.multiselect("Severity", ["high", "medium", "low"], default=["high", "medium", "low"], key=f"sev_{module}")
     data = [d for d in data if d["severity"] in sev]
     show_table([{k: v for k, v in d.items() if not k.startswith("_")} for d in data], "No alerts.")

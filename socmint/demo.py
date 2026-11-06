@@ -99,9 +99,10 @@ def run_demo() -> dict[str, Any]:
 
     with session_scope() as s:
         alerts = Counter(m for (m,) in s.execute(select(Alert.module)).all())
-        narrs = s.scalars(select(Narrative)).all()
+        narrs = s.scalars(select(Narrative).where(Narrative.investigation_id.is_(None))).all()
         top_narr = max(narrs, key=lambda n: (bool(n.matched_factcheck_ids), n.growth_rate, n.size), default=None)
-        top_coord = s.scalars(select(CoordinationGroup).order_by(CoordinationGroup.score.desc())).first()
+        top_coord = s.scalars(select(CoordinationGroup).where(CoordinationGroup.investigation_id.is_(None))
+                              .order_by(CoordinationGroup.score.desc())).first()
         market = s.scalar(select(Alert).where(Alert.module == "market"))
         looks = s.scalar(select(func.count(LookalikeDomain.id)).where(LookalikeDomain.registered))
         summary = {

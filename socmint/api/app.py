@@ -17,6 +17,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from sqlalchemy import desc, select
 
+from socmint.analyze.runs import latest_global_run
 from socmint.core.db import audit, init_db, session_scope
 from socmint.core.logging import get_logger
 from socmint.core.models import Alert, Narrative
@@ -109,13 +110,14 @@ def alerts(request: Request, module: str | None = None, limit: int = 100) -> lis
         rows = s.scalars(q).all()
         audit(s, f"api:{_client(request)}", "list_alerts", f"module={module} n={len(rows)}")
         return [{"id": a.id, "module": a.module, "severity": a.severity, "title": a.title, "evidence": a.evidence,
-                 "created_at": a.created_at.isoformat(), "status": a.status, "synthetic": a.synthetic} for a in rows]
+                 "created_at": a.created_at.isoformat(), "status": a.status, "synthetic": a.synthetic,
+                 "investigation_id": (a.evidence or {}).get("investigation_id")} for a in rows]
 
 
 @app.get("/narratives", dependencies=[Depends(require_key)])
 def narratives(request: Request) -> list[dict]:
     with session_scope() as s:
-        latest = s.scalar(select(Narrative.run_id).order_by(desc(Narrative.created_at)).limit(1))
+        latest = latest_global_run(s, Narrative)  # investigation-scoped runs are not the global picture
         rows = s.scalars(select(Narrative).where(Narrative.run_id == latest).order_by(desc(Narrative.growth_rate))).all() \
             if latest else []
         audit(s, f"api:{_client(request)}", "list_narratives", f"run={latest} n={len(rows)}")
