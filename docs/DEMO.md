@@ -6,14 +6,18 @@ symbols, plus a fictional dam ("Demosagar"). It runs offline after installation 
 ## Start
 
 ```bash
-uv sync --extra dev                  # once
-uv run socmint showcase --demo       # rebuilds data/demo.db (about 40 s on TF-IDF, about 2 min with the e5 model)
+uv sync --extra dev                    # once
+uv run socmint showcase --rebuild      # before the meeting: builds data/demo.db (about 45 s with the e5 model)
+uv run socmint showcase --demo         # in the meeting: reuses data/demo.db and starts in a few seconds
 # open http://127.0.0.1:8502
 ```
 
-`--demo` rebuilds `data/demo.db` from scratch. It runs the v0 demo (tipline, scams, narratives, market) and then
-three investigations through the real collect → categorise → analyse → promote pipeline, with fixture sources standing
-in for the platforms. The main database (`data/socmint.db`) is never touched.
+`--demo` reuses `data/demo.db` when it exists, has the current schema and holds the three showcase investigations;
+otherwise it builds it first. `--rebuild` always builds it from scratch and prints how long that took. The build runs
+the v0 demo (tipline, scams, narratives, market) and then three investigations through the real collect → categorise
+→ analyse → promote pipeline, with fixture sources standing in for the platforms. The main database
+(`data/socmint.db`) is never touched. (`socmint demo` also rebuilds `data/demo.db`, without the investigations, so the
+next `showcase --demo` builds again.)
 
 The yellow **DEMO DATA (synthetic)** banner is shown on every investigation.
 

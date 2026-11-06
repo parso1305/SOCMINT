@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import secrets
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import typer
@@ -179,7 +181,6 @@ def dashboard(demo_db: bool = typer.Option(False, "--demo", help="Browse data/de
               port: int = 8501) -> None:
     """Start the Streamlit analyst dashboard (localhost)."""
     import os
-    import subprocess
 
     env = dict(os.environ)
     if demo_db:
@@ -192,22 +193,30 @@ def dashboard(demo_db: bool = typer.Option(False, "--demo", help="Browse data/de
 
 
 @app.command()
-def showcase(demo_db: bool = typer.Option(False, "--demo", help="Rebuild data/demo.db with the synthetic showcase "
-                                                                   "investigations and open it (offline)."),
+def showcase(demo_db: bool = typer.Option(False, "--demo", help="Open data/demo.db with the synthetic showcase "
+                                                                   "investigations (offline); builds it if needed."),
+             rebuild: bool = typer.Option(False, "--rebuild", help="Rebuild data/demo.db first (implies --demo)."),
              port: int = 8502) -> None:
     """Start the one-page showcase dashboard (localhost): events, people/accounts and groups."""
     import os
-    import subprocess
+
+    from socmint import demo
 
     env = dict(os.environ)
-    if demo_db:
-        from socmint.demo import run_showcase_demo
-
-        typer.echo("Rebuilding data/demo.db with synthetic data (offline)…")
-        s = run_showcase_demo()
-        for k, v in s["investigations"].items():
-            typer.echo(f"  {k:<8} #{v['id']}: {v['posts']} posts  sources: {v['runs']}")
-        env.update({"SOCMINT_DB_URL": s["db"], "SOCMINT_OFFLINE": "1"})
+    if demo_db or rebuild:
+        ready, why = (False, "--rebuild") if rebuild else demo.demo_db_ready()
+        if ready:
+            typer.echo("Using existing data/demo.db (run with --rebuild to build it again).")
+            db_url = f"sqlite:///{demo.demo_db_path().as_posix()}"
+        else:
+            typer.echo(f"Building data/demo.db with synthetic data (offline; {why})…")
+            t0 = time.monotonic()
+            s = demo.run_showcase_demo()
+            for k, v in s["investigations"].items():
+                typer.echo(f"  {k:<8} #{v['id']}: {v['posts']} posts  sources: {v['runs']}")
+            typer.echo(f"Built data/demo.db in {time.monotonic() - t0:.0f} s.")
+            db_url = s["db"]
+        env.update({"SOCMINT_DB_URL": db_url, "SOCMINT_OFFLINE": "1"})
     app_path = Path(__file__).parent / "showcase" / "app.py"
     typer.echo(f"Showcase: open http://127.0.0.1:{port} in your browser  (Ctrl+C to stop)")
     subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), "--server.address", "127.0.0.1",

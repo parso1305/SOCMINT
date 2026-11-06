@@ -173,6 +173,37 @@ def seed_investigations(now=None) -> dict[str, Any]:
     return out
 
 
+def demo_db_ready() -> tuple[bool, str]:
+    """Can `showcase --demo` reuse data/demo.db? It must exist, have the current schema (every table and column
+    of the models) and hold the three showcase investigations. Returns (ready, reason when not)."""
+    from sqlalchemy import create_engine, func, inspect, select
+
+    from socmint import scenario
+    from socmint.core.models import Base, Investigation
+
+    path = demo_db_path()
+    if not path.exists():
+        return False, "data/demo.db does not exist"
+    engine = create_engine(f"sqlite:///{path.as_posix()}")
+    try:
+        insp = inspect(engine)
+        have = set(insp.get_table_names())
+        for table in Base.metadata.sorted_tables:
+            if table.name not in have:
+                return False, f"schema is out of date (no table {table.name})"
+            cols = {c["name"] for c in insp.get_columns(table.name)}
+            if missing := [c.name for c in table.columns if c.name not in cols]:
+                return False, f"schema is out of date ({table.name} lacks {', '.join(missing)})"
+        with engine.connect() as conn:
+            n = conn.scalar(select(func.count(Investigation.id)).where(Investigation.name.in_(
+                [scenario.EVENT_NAME, scenario.SUBJECT_NAME, scenario.GROUP_NAME])))
+        if n < 3:
+            return False, "the showcase investigations are missing"
+        return True, ""
+    finally:
+        engine.dispose()
+
+
 def run_showcase_demo() -> dict[str, Any]:
     """Rebuild data/demo.db: the v0 demo plus the three showcase investigations."""
     summary = run_demo()
