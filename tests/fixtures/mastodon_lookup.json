@@ -1,0 +1,4 @@
+{"id": "77", "username": "river_demo", "acct": "river_demo", "display_name": "River Demo (fictional)", "locked": false, "bot": false,
+ "discoverable": true, "indexable": true, "noindex": false, "group": false, "created_at": "2022-11-01T00:00:00.000Z",
+ "note": "<p>Fictional account for tests. Posts <a href=\"https://mastodon.social/tags/rivers\" class=\"mention hashtag\">#<span>rivers</span></a></p>",
+ "url": "https://mastodon.social/@river_demo", "followers_count": 1200, "following_count": 90, "statuses_count": 4100}

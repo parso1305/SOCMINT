@@ -1,0 +1,90 @@
+[
+ {
+  "did": "did:plc:demoalpha111",
+  "time_us": 1,
+  "kind": "commit",
+  "commit": {
+   "operation": "create",
+   "collection": "app.bsky.feed.post",
+   "rkey": "3kdemo1",
+   "record": {
+    "createdAt": "2026-07-21T10:15:00.000Z",
+    "text": "Khadakwasla dam gates opened #PuneRains",
+    "facets": [
+     {
+      "index": {
+       "byteStart": 29,
+       "byteEnd": 39
+      },
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#tag",
+        "tag": "PuneRains"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "did": "did:plc:demobeta222",
+  "time_us": 2,
+  "kind": "commit",
+  "commit": {
+   "operation": "create",
+   "collection": "app.bsky.feed.post",
+   "rkey": "3kdemo2",
+   "record": {
+    "createdAt": "2026-07-21T11:00:00.000Z",
+    "text": "पुणे बाढ़ की पुरानी वीडियो फिर से वायरल"
+   }
+  }
+ },
+ {
+  "did": "did:plc:demooptout444",
+  "time_us": 3,
+  "kind": "commit",
+  "commit": {
+   "operation": "create",
+   "collection": "app.bsky.feed.post",
+   "rkey": "3kdemo3",
+   "record": {
+    "createdAt": "2026-07-21T12:00:00.000Z",
+    "text": "Pune flood photos"
+   }
+  }
+ },
+ {
+  "did": "did:plc:demonoise666",
+  "time_us": 4,
+  "kind": "commit",
+  "commit": {
+   "operation": "create",
+   "collection": "app.bsky.feed.post",
+   "rkey": "3knoise",
+   "record": {
+    "createdAt": "2026-07-21T12:00:00.000Z",
+    "text": "Cricket score update, nothing about floods here"
+   }
+  }
+ },
+ {
+  "did": "did:plc:demoalpha111",
+  "time_us": 5,
+  "kind": "commit",
+  "commit": {
+   "operation": "delete",
+   "collection": "app.bsky.feed.post",
+   "rkey": "3kgone"
+  }
+ },
+ {
+  "did": "did:plc:demoalpha111",
+  "time_us": 6,
+  "kind": "identity",
+  "identity": {
+   "did": "did:plc:demoalpha111"
+  }
+ }
+]

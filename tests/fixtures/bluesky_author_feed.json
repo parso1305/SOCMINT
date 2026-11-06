@@ -1,0 +1,12 @@
+{"feed": [
+  {"post": {"uri": "at://did:plc:demoalpha111/app.bsky.feed.post/3kpinned", "author": {"did": "did:plc:demoalpha111", "handle": "alpha-demo.bsky.social", "labels": []},
+            "record": {"createdAt": "2025-01-01T00:00:00.000Z", "text": "Pinned intro post"}, "labels": []},
+   "reason": {"$type": "app.bsky.feed.defs#reasonPin"}},
+  {"post": {"uri": "at://did:plc:demoalpha111/app.bsky.feed.post/3knew", "author": {"did": "did:plc:demoalpha111", "handle": "alpha-demo.bsky.social", "labels": []},
+            "record": {"createdAt": "2026-07-22T09:00:00.000Z", "text": "Helpline numbers for flood relief", "langs": ["en"]}, "likeCount": 3, "labels": []}},
+  {"post": {"uri": "at://did:plc:demoother555/app.bsky.feed.post/3krepost", "author": {"did": "did:plc:demoother555", "handle": "other-demo.bsky.social", "labels": []},
+            "record": {"createdAt": "2026-07-22T08:00:00.000Z", "text": "Someone else's post"}, "labels": []},
+   "reason": {"$type": "app.bsky.feed.defs#reasonRepost", "by": {"did": "did:plc:demoalpha111"}}},
+  {"post": {"uri": "at://did:plc:demoalpha111/app.bsky.feed.post/3kold", "author": {"did": "did:plc:demoalpha111", "handle": "alpha-demo.bsky.social", "labels": []},
+            "record": {"createdAt": "2026-06-01T09:00:00.000Z", "text": "Old post before the window"}, "labels": []}}
+], "cursor": "c1"}

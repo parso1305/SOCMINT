@@ -51,6 +51,22 @@ sources:
       - '("digital arrest" OR "cyber fraud" OR "online scam") sourcecountry:IN'
       - '("pump and dump" OR "stock tips" OR SEBI) sourcecountry:IN'
 
+  # ---------------- Social, zero-key (investigation sources; see SOURCES.md) ----------------
+  # Used by `socmint investigate collect`. With no `keywords`/`hashtags` the global `socmint ingest` run fetches nothing.
+  - name: bluesky
+    type: bluesky
+    rate_limit_s: 1                 # public AppView robots.txt: "up to a handful of concurrent requests should be ok"
+    search_mode: auto               # searchPosts first; on HTTP 401/403 a bounded Jetstream listen (verified 2026-11-06: 403)
+    jetstream_url: "wss://jetstream2.us-east.bsky.network/subscribe"
+    jetstream_max_seconds: 60
+    jetstream_max_scanned: 20000
+    page_limit: 5                   # getAuthorFeed pages of 100 per subject account
+  - name: mastodon
+    type: mastodon
+    rate_limit_s: 2                 # unauthenticated limit: 300 requests / 5 min per IP
+    instances: [mastodon.social]
+    page_limit: 3                   # pages of 40 statuses per hashtag / account
+
   # ---------------- Threat feeds ----------------
   - name: openphish
     type: openphish

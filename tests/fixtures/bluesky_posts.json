@@ -1,0 +1,157 @@
+{
+ "posts": [
+  {
+   "uri": "at://did:plc:demoalpha111/app.bsky.feed.post/3kdemo1",
+   "cid": "bafydemo1",
+   "author": {
+    "did": "did:plc:demoalpha111",
+    "handle": "alpha-demo.bsky.social",
+    "displayName": "Alpha Demo (fictional)",
+    "labels": [],
+    "createdAt": "2024-01-02T03:04:05.000Z"
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-07-21T10:15:00.000Z",
+    "langs": [
+     "en"
+    ],
+    "text": "Khadakwasla dam gates opened, avoid the riverbank @beta-demo.bsky.social details relief.example #PuneRains",
+    "facets": [
+     {
+      "index": {
+       "byteStart": 50,
+       "byteEnd": 72
+      },
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#mention",
+        "did": "did:plc:demobeta222"
+       }
+      ]
+     },
+     {
+      "index": {
+       "byteStart": 81,
+       "byteEnd": 95
+      },
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#link",
+        "uri": "https://relief.example/info"
+       }
+      ]
+     },
+     {
+      "index": {
+       "byteStart": 96,
+       "byteEnd": 106
+      },
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#tag",
+        "tag": "PuneRains"
+       }
+      ]
+     }
+    ],
+    "reply": {
+     "parent": {
+      "uri": "at://did:plc:demogamma333/app.bsky.feed.post/3kparent",
+      "cid": "x"
+     },
+     "root": {
+      "uri": "at://did:plc:demogamma333/app.bsky.feed.post/3kparent",
+      "cid": "x"
+     }
+    }
+   },
+   "embed": {
+    "$type": "app.bsky.embed.images#view",
+    "images": [
+     {
+      "thumb": "https://cdn.example/t.jpg",
+      "fullsize": "https://cdn.example/f.jpg",
+      "alt": ""
+     }
+    ]
+   },
+   "replyCount": 2,
+   "repostCount": 5,
+   "likeCount": 11,
+   "quoteCount": 1,
+   "indexedAt": "2026-07-21T10:15:01.000Z",
+   "labels": []
+  },
+  {
+   "uri": "at://did:plc:demobeta222/app.bsky.feed.post/3kdemo2",
+   "cid": "bafydemo2",
+   "author": {
+    "did": "did:plc:demobeta222",
+    "handle": "beta-demo.bsky.social",
+    "displayName": "",
+    "labels": []
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-07-21T11:00:00.000Z",
+    "langs": [
+     "hi"
+    ],
+    "text": "पुणे बाढ़ की पुरानी वीडियो फिर से वायरल",
+    "embed": {
+     "$type": "app.bsky.embed.record",
+     "record": {
+      "uri": "at://did:plc:demoalpha111/app.bsky.feed.post/3kdemo1",
+      "cid": "bafydemo1"
+     }
+    }
+   },
+   "replyCount": 0,
+   "repostCount": 0,
+   "likeCount": 0,
+   "quoteCount": 0,
+   "labels": []
+  },
+  {
+   "uri": "at://did:plc:demooptout444/app.bsky.feed.post/3kdemo3",
+   "cid": "bafydemo3",
+   "author": {
+    "did": "did:plc:demooptout444",
+    "handle": "quiet-demo.bsky.social",
+    "labels": [
+     {
+      "src": "did:plc:demooptout444",
+      "uri": "at://did:plc:demooptout444/app.bsky.actor.profile/self",
+      "val": "!no-unauthenticated",
+      "cts": "2025-01-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-07-21T12:00:00.000Z",
+    "text": "Pune flood photos #PuneRains",
+    "facets": [
+     {
+      "index": {
+       "byteStart": 18,
+       "byteEnd": 28
+      },
+      "features": [
+       {
+        "$type": "app.bsky.richtext.facet#tag",
+        "tag": "PuneRains"
+       }
+      ]
+     }
+    ]
+   },
+   "replyCount": 0,
+   "repostCount": 0,
+   "likeCount": 0,
+   "quoteCount": 0,
+   "labels": []
+  }
+ ]
+}

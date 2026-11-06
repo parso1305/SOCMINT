@@ -1,0 +1,12 @@
+[
+ {"id": "2002", "created_at": "2026-07-22T09:00:00.000Z", "in_reply_to_id": "2001", "in_reply_to_account_id": "77", "visibility": "public", "language": "mr",
+  "uri": "https://mastodon.social/users/river_demo/statuses/2002", "url": "https://mastodon.social/@river_demo/2002",
+  "content": "<p>खडकवासला धरणातून विसर्ग वाढवला</p>", "replies_count": 0, "reblogs_count": 2, "favourites_count": 3,
+  "account": {"id": "77", "username": "river_demo", "acct": "river_demo", "indexable": true, "noindex": false},
+  "mentions": [], "tags": [], "media_attachments": []},
+ {"id": "2001", "created_at": "2026-07-22T08:00:00.000Z", "visibility": "public", "language": "en",
+  "uri": "https://mastodon.social/users/river_demo/statuses/2001", "url": "https://mastodon.social/@river_demo/2001",
+  "content": "<p>Water level rising at the dam</p>",
+  "account": {"id": "77", "username": "river_demo", "acct": "river_demo", "indexable": true, "noindex": false},
+  "mentions": [], "tags": [], "media_attachments": []}
+]

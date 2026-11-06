@@ -122,6 +122,7 @@ class FetchResult(BaseModel):
     market: list[MarketIn] = Field(default_factory=list)
     symbols: list[dict[str, Any]] = Field(default_factory=list)
     accounts: list[AccountIn] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)  # human-readable run notes (fallbacks, opt-out skips)
 
     def count(self) -> int:
         return sum(len(x) for x in (self.items, self.factchecks, self.indicators, self.domains, self.market, self.symbols))

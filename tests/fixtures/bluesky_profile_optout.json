@@ -1,0 +1,3 @@
+{"did": "did:plc:demooptout444", "handle": "quiet-demo.bsky.social", "displayName": "Quiet Demo (fictional)",
+ "followersCount": 3, "followsCount": 5, "postsCount": 9, "createdAt": "2024-05-02T03:04:05.000Z",
+ "labels": [{"src": "did:plc:demooptout444", "uri": "at://did:plc:demooptout444/app.bsky.actor.profile/self", "val": "!no-unauthenticated", "cts": "2025-01-01T00:00:00.000Z"}]}
