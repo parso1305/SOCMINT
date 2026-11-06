@@ -49,14 +49,20 @@ def _day(dt: datetime) -> datetime:
     return dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def count_mentions(since: datetime) -> tuple[dict[tuple[str, datetime], int], dict[tuple[str, datetime], list[int]]]:
-    """(symbol, day) -> mention count, and -> item ids."""
+def count_mentions(since: datetime, item_ids: list[int] | None = None
+                   ) -> tuple[dict[tuple[str, datetime], int], dict[tuple[str, datetime], list[int]]]:
+    """(symbol, day) -> mention count, and -> item ids. `item_ids` restricts counting to those posts."""
     syms = known_symbols()
     counts: Counter = Counter()
     ids: dict[tuple[str, datetime], list[int]] = defaultdict(list)
+    window = (Item.published_at >= since) | (Item.published_at.is_(None))
+    cols = (Item.id, Item.text, Item.published_at, Item.ingested_at)
     with session_scope() as s:
-        rows = s.execute(select(Item.id, Item.text, Item.published_at, Item.ingested_at)
-                         .where((Item.published_at >= since) | (Item.published_at.is_(None)))).all()
+        if item_ids is None:
+            rows = s.execute(select(*cols).where(window)).all()
+        else:
+            rows = [r for i in range(0, len(item_ids), 500)
+                    for r in s.execute(select(*cols).where(window, Item.id.in_(item_ids[i : i + 500]))).all()]
     for r in rows:
         when = r.published_at or r.ingested_at
         for sym in extract_tickers(r.text or "", syms):
@@ -96,7 +102,11 @@ def _sebi_claims(texts: list[str]) -> dict[str, Any]:
             "not_in_registry": sorted(n for n in claimed if n not in reg), "registry_rows": len(reg)}
 
 
-def run(as_of: datetime | None = None) -> dict[str, Any]:
+def run(as_of: datetime | None = None, item_ids: list[int] | None = None,
+        investigation_id: int | None = None) -> dict[str, Any]:
+    """Flag symbols. With `item_ids`, mentions come only from those posts (investigation scope) and the
+    shared market rows are not modified."""
+    scoped = item_ids is not None
     base_days = int(threshold("market.baseline_days", 30))
     mz_t, vz_t = float(threshold("market.mention_z", 3.0)), float(threshold("market.volume_z", 3.0))
     min_m = int(threshold("market.min_mentions", 5))
@@ -107,13 +117,13 @@ def run(as_of: datetime | None = None) -> dict[str, Any]:
         return {"note": "no market data (run `socmint ingest --source nse_bhavcopy` or the demo)", "alerts": 0}
     latest = _day(latest)
     since = latest - timedelta(days=base_days + 7)
-    counts, ids = count_mentions(since)
+    counts, ids = count_mentions(since, item_ids)
     summary = {"as_of": latest.date().isoformat(), "symbols_with_mentions": len({k[0] for k in counts}), "flagged": 0,
                "alerts": 0}
 
     with session_scope() as s:
-        # store mention counts on existing market rows
-        for (sym, day), n in counts.items():
+        # store mention counts on existing market rows (global runs only; scoped counts are partial)
+        for (sym, day), n in ({} if scoped else counts).items():
             row = s.scalar(select(MarketDaily).where(MarketDaily.symbol == sym, MarketDaily.date == day))
             if row:
                 row.mentions = n
@@ -135,7 +145,8 @@ def run(as_of: datetime | None = None) -> dict[str, Any]:
             mz = _z(float(mentions), m_hist, float(threshold("market.min_std_mentions", 1.0)))
             vz = _z(math.log1p(today.volume), v_hist, float(threshold("market.min_std_log_volume", 0.05)))
             pct = ((today.close / prev[-1].close) - 1) * 100 if prev and prev[-1].close and today.close else 0.0
-            today.mention_z, today.volume_z, today.price_change = mz, vz, round(pct, 2)
+            if not scoped:
+                today.mention_z, today.volume_z, today.price_change = mz, vz, round(pct, 2)
             if mz is None or vz is None or mz < mz_t or vz < vz_t or mentions < min_m:
                 continue
             summary["flagged"] += 1
@@ -155,7 +166,7 @@ def run(as_of: datetime | None = None) -> dict[str, Any]:
                 factors["price_jump"] = float(w.get("price_jump", 5))
             score = min(sum(factors.values()), 100.0)
             vol_ratio = math.expm1(math.log1p(today.volume)) / max(math.expm1(float(np.mean(v_hist))), 1.0)
-            key = f"market:{sym}:{latest.date().isoformat()}"
+            key = f"market:{sym}:{latest.date().isoformat()}" + (f":inv{investigation_id}" if scoped else "")
             if key in existing:
                 continue
             synthetic = bool(today.synthetic)
@@ -170,7 +181,7 @@ def run(as_of: datetime | None = None) -> dict[str, Any]:
                                   "baseline_days": len(prev), "avg_turnover_inr": round(avg_turnover),
                                   "large_cap": bool(large.get(sym, False)), "promo_share": round(promo_share, 2),
                                   "promo_keywords": promo_words, "sebi_check": sebi,
-                                  "mention_item_ids": ids[(sym, latest)][:50],
+                                  "mention_item_ids": ids[(sym, latest)][:50], "investigation_id": investigation_id,
                                   "quoted_posts": [t[:200] for t in list(texts)[:5]]}))
             existing.add(key)
             summary["alerts"] += 1

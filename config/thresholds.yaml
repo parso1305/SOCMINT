@@ -95,6 +95,7 @@ categorize:            # post categories (config/categories.yaml)
   zero_shot_hypothesis: "This text is about {}."
 
 investigate:
-  default_window_days: 7     # first collection of an event with no window start / a subject or group
+  default_window_days: 7     # first collection of an event with no window start
+  subject_window_days: 30    # first collection of a subject or group (recent public posts)
   per_source_limit: 200      # max posts per source per collection
   top_authors: 25            # authors linked as `top_author` per investigation

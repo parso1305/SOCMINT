@@ -212,5 +212,184 @@ def _print_json(obj: object) -> None:
     typer.echo(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+# ------------------------------------------------------------------------------------------- investigations
+inv_app = typer.Typer(help="Investigations: events, subjects (public accounts) and groups.", no_args_is_help=True)
+app.add_typer(inv_app, name="investigate")
+
+
+def _inv_ref(ref: str) -> int:
+    from socmint.investigate.runner import InvestigationNotFound, get
+
+    try:
+        return get(ref).id
+    except InvestigationNotFound as e:
+        raise typer.BadParameter(str(e)) from None
+
+
+@inv_app.command("create")
+def inv_create(
+    file: Path = typer.Option(None, "--file", "-f", help="YAML file (several investigations separated by ---)."),
+    kind: str = typer.Option(None, "--kind", help="event | subject | group"),
+    name: str = typer.Option(None, "--name"),
+    purpose: str = typer.Option(None, "--purpose", help="Required: why this target is monitored."),
+    terms: str = typer.Option(None, "--terms", help="Comma-separated keywords/hashtags (event)."),
+    lang: str = typer.Option("en", "--lang", help="Language of --terms (en, hi, mr, hinglish)."),
+    handle: list[str] = typer.Option(None, "--handle", help="platform:handle, repeatable (subject/group)."),
+    source: list[str] = typer.Option(None, "--source", help="Logical source, repeatable (default: no-key sources)."),
+    description: str = typer.Option("", "--description"),
+) -> None:
+    """Create investigation(s) from a YAML file or from options."""
+    from pydantic import ValidationError
+
+    from socmint.core.db import init_db
+    from socmint.investigate.config import InvestigationConfig, load_file, parse_handles
+    from socmint.investigate.runner import create
+
+    init_db()
+    try:
+        if file:
+            cfgs = load_file(file)
+        else:
+            if not (kind and name):
+                raise typer.BadParameter("give --file, or --kind and --name (plus --purpose)")
+            cfgs = [InvestigationConfig(
+                kind=kind, name=name, purpose=purpose or "", description=description,
+                terms={lang: [t.strip() for t in (terms or "").split(",") if t.strip()]} if terms else {},
+                handles=parse_handles(handle or []), sources=list(source or []))]
+    except (ValidationError, ValueError) as e:
+        raise typer.BadParameter(str(e)) from None
+    for c in cfgs:
+        try:
+            iid = create(c)
+        except ValueError as e:
+            typer.echo(f"skipped {c.name!r}: {e}")
+            continue
+        typer.echo(f"created investigation #{iid} [{c.kind}] {c.name}  sources: {', '.join(c.sources)}")
+
+
+@inv_app.command("list")
+def inv_list() -> None:
+    """List investigations."""
+    from socmint.core.db import init_db
+    from socmint.investigate.runner import list_all
+
+    init_db()
+    rows = list_all()
+    if not rows:
+        typer.echo("No investigations yet. Create one with `socmint investigate create`.")
+    for r in rows:
+        last = r["last_collected_at"].strftime("%Y-%m-%d %H:%M") if r["last_collected_at"] else "never"
+        typer.echo(f"#{r['id']:<3} {r['kind']:<8} {r['name'][:40]:<40} posts={r['posts']:<5} accounts={r['accounts']:<4} "
+                   f"collected={last}" + ("  [synthetic]" if r["synthetic"] else ""))
+
+
+@inv_app.command("collect")
+def inv_collect(ref: str = typer.Argument(..., help="Investigation id or name."),
+                source: str = typer.Option(None, "--source", help="Only this logical source (e.g. bluesky).")) -> None:
+    """Collect now from every configured source (failing sources are reported and skipped)."""
+    from socmint.core.db import init_db
+    from socmint.ingest.registry import sync_brands
+    from socmint.investigate.runner import collect
+
+    init_db()
+    sync_brands()
+
+    def progress(name: str, run: dict) -> None:
+        typer.echo(f"  {name:<22} {run['status']:<18} fetched={run['fetched']:<5} new={run['new']:<5}"
+                   + (f" {run['detail'][:150]}" if run.get("detail") else ""))
+
+    out = collect(_inv_ref(ref), only_source=source, progress=progress)
+    typer.echo(f"\nnew posts: {out['new_posts']}   categories: {out['enrich'].get('labels', {})}"
+               + (f"   degraded: {out['enrich']['degraded']}" if out["enrich"].get("degraded") else ""))
+
+
+@inv_app.command("analyze")
+def inv_analyze(ref: str = typer.Argument(..., help="Investigation id or name.")) -> None:
+    """Narratives, possible coordination and market risk, scoped to this investigation's posts."""
+    from socmint.core.db import init_db
+    from socmint.investigate.runner import analyze
+
+    init_db()
+    out = analyze(_inv_ref(ref))
+    for m, r in out["modules"].items():
+        typer.echo(f"{m:<14} {r['status']:<6} {json.dumps(r.get('result') or r.get('error'), default=str)[:240]}")
+
+
+@inv_app.command("show")
+def inv_show(ref: str = typer.Argument(..., help="Investigation id or name."),
+             as_json: bool = typer.Option(False, "--json", help="Print the full summary as JSON.")) -> None:
+    """Summary: counts, categories, top accounts/hashtags/domains, indicators, fact-checks, coordination."""
+    from socmint.core.db import init_db
+    from socmint.investigate.report import summary
+    from socmint.investigate.runner import record_view
+
+    init_db()
+    iid = _inv_ref(ref)
+    record_view(iid, "cli")
+    s = summary(iid)
+    if as_json:
+        _print_json(s)
+        return
+    i, c = s["investigation"], s["counts"]
+    typer.echo(f"#{i['id']} [{i['kind']}] {i['name']}" + ("  (synthetic)" if i["synthetic"] else ""))
+    typer.echo(f"purpose: {i['purpose']}")
+    typer.echo(f"posts {c['posts']} · sources {c['sources']} · accounts {c['accounts']} · "
+               f"first {s['first_seen']} · last {s['last_seen']}")
+    typer.echo(f"by source:   {s['by_source']}\nby language: {s['by_language']}\nby category: {s['by_category']}")
+    typer.echo(f"top hashtags: {s['top_hashtags'][:8]}\ntop domains:  {s['top_domains'][:8]}")
+    for a in s["top_accounts"][:8]:
+        typer.echo(f"  account {a['platform']}:{a['handle'] or a['platform_id']} role={a['role']} "
+                   f"posts={a['posts_in_investigation']} followers={a['followers']}")
+    for ind in s["indicators"][:10]:
+        typer.echo(f"  indicator {ind['type']} {ind['value']} ({ind['status']}) in {ind['posts_here']} posts")
+    for f in s["factcheck_matches"][:5]:
+        typer.echo(f"  fact-check match ({f['posts']} posts): {f['publisher']}: {f['title'][:90]}")
+    for g in s["coordination_groups"][:5]:
+        typer.echo(f"  possible coordination #{g['id']}: score {g['score']:.2f}, {g['accounts']} accounts, "
+                   f"{g['time_span_minutes']:.0f} min: {g['sample_text'][:70]}")
+    for m in s["market_alerts"]:
+        typer.echo(f"  market risk: {m['title']} (score {m['risk_score']})")
+
+
+@inv_app.command("export")
+def inv_export(ref: str = typer.Argument(..., help="Investigation id or name."),
+               fmt: str = typer.Option("json", "--format", help="json | csv")) -> None:
+    """Export posts, accounts, edges, indicators, summary and config with a SHA-256 manifest (data/exports/)."""
+    from socmint.core.db import init_db
+    from socmint.investigate.report import export
+
+    init_db()
+    path = export(_inv_ref(ref), fmt)
+    typer.echo(f"exported to {path}")
+
+
+@inv_app.command("promote-group")
+def inv_promote(group_id: int = typer.Argument(..., help="Coordination group id (see `investigate show`)."),
+                name: str = typer.Option(..., "--name"),
+                purpose: str = typer.Option(..., "--purpose", help="Required: why this group is monitored.")) -> None:
+    """Promote a detected possible-coordination group to a `group` investigation."""
+    from socmint.core.db import init_db
+    from socmint.investigate.runner import promote_group
+
+    init_db()
+    if not purpose.strip():
+        raise typer.BadParameter("purpose is required")
+    typer.echo(f"created group investigation #{promote_group(group_id, name, purpose)}")
+
+
+@inv_app.command("delete")
+def inv_delete(ref: str = typer.Argument(..., help="Investigation id or name."),
+               yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask for confirmation.")) -> None:
+    """Delete an investigation, its links and any posts/accounts no other investigation references."""
+    from socmint.core.db import init_db
+    from socmint.investigate.runner import delete_investigation, get
+
+    init_db()
+    inv = get(_inv_ref(ref))
+    if not yes and not typer.confirm(f"Delete investigation #{inv.id} {inv.name!r} and its orphaned posts?"):
+        raise typer.Abort()
+    _print_json(delete_investigation(inv.id))
+
+
 if __name__ == "__main__":
     app()

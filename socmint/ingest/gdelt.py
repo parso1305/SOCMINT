@@ -61,7 +61,8 @@ class GdeltSource(Source):
             return res
         start = max(since or utcnow() - timedelta(days=7), utcnow() - timedelta(days=89))  # DOC API: last 3 months
         errors: list[str] = []
-        self._query(q, {"startdatetime": start.strftime("%Y%m%d%H%M%S"), "maxrecords": min(250, limit)}, res, errors)
+        self._query(q, {"startdatetime": start.strftime("%Y%m%d%H%M%S"), "maxrecords": min(250, limit)}, res, errors,
+                    retries=int(self.cfg.get("event_retries", 0)))  # interactive: fail fast when throttled
         if errors:
             raise RuntimeError("GDELT returned no JSON: " + "; ".join(errors))
         matcher = TermMatcher(terms_by_lang)
@@ -70,10 +71,11 @@ class GdeltSource(Source):
         res.notes.append(f"query: {q}")
         return res
 
-    def _query(self, q: str, extra: dict[str, Any], res: FetchResult, errors: list[str]) -> None:
+    def _query(self, q: str, extra: dict[str, Any], res: FetchResult, errors: list[str],
+               retries: int | None = None) -> None:
         params = {"query": q, "mode": "artlist", "format": "json",
                   "maxrecords": int(self.cfg.get("maxrecords", 75)), "sort": "datedesc", **extra}
-        raw = self.client.get(API, params=params, cache_ttl=self.cfg.get("cache_ttl_s", 1800))
+        raw = self.client.get(API, params=params, cache_ttl=self.cfg.get("cache_ttl_s", 1800), retries=retries)
         try:
             data: dict[str, Any] = json.loads(raw.decode("utf-8", errors="replace") or "{}")
         except json.JSONDecodeError:

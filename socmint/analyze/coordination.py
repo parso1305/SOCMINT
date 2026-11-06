@@ -26,7 +26,7 @@ from socmint.core.settings import threshold
 from socmint.understand.normalize import match_text
 
 log = get_logger(__name__)
-PUBLIC_TYPES = ("telegram", "reddit", "youtube")
+PUBLIC_TYPES = ("telegram", "reddit", "youtube", "bluesky", "mastodon")
 _TOK = re.compile(r"[a-z0-9ऀ-ॿ]+")
 
 
@@ -66,7 +66,8 @@ def group_metrics(times: list, accounts: list[str], channels: list[str]) -> dict
             "median_time": med}
 
 
-def run(window_days: int = 7) -> dict[str, Any]:
+def run(window_days: int = 7, item_ids: list[int] | None = None, investigation_id: int | None = None) -> dict[str, Any]:
+    """Find near-duplicate groups. With `item_ids`, only those posts (any age) are analysed (investigation scope)."""
     jac = float(threshold("coordination.jaccard", 0.8))
     num_perm = int(threshold("coordination.num_perm", 128))
     k = int(threshold("coordination.shingle_words", 3))
@@ -74,11 +75,15 @@ def run(window_days: int = 7) -> dict[str, Any]:
     min_acc = int(threshold("coordination.min_accounts", 3))
     alert_score = float(threshold("coordination.alert_score", 0.6))
     since = utcnow() - timedelta(days=window_days)
+    cols = (Item.id, Item.text, Item.published_at, Item.author_handle, Item.channel, Item.url, Item.synthetic,
+            Item.source_type)
+    base = (Item.source_type.in_(PUBLIC_TYPES), Item.author_handle.is_not(None), Item.published_at.is_not(None))
     with session_scope() as s:
-        rows = s.execute(select(Item.id, Item.text, Item.published_at, Item.author_handle, Item.channel, Item.url,
-                                Item.synthetic, Item.source_type)
-                         .where(Item.source_type.in_(PUBLIC_TYPES), Item.published_at >= since,
-                                Item.author_handle.is_not(None))).all()
+        if item_ids is None:
+            rows = s.execute(select(*cols).where(*base, Item.published_at >= since)).all()
+        else:
+            rows = [r for i in range(0, len(item_ids), 500)
+                    for r in s.execute(select(*cols).where(*base, Item.id.in_(item_ids[i : i + 500]))).all()]
     lsh = MinHashLSH(threshold=jac, num_perm=num_perm)
     hashes: dict[int, MinHash] = {}
     for r in rows:
@@ -107,14 +112,14 @@ def run(window_days: int = 7) -> dict[str, Any]:
 
     by_id = {r.id: r for r in rows}
     run_id = utcnow().strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:6]
-    summary = {"items": len(rows), "groups": 0, "alerts": 0, "run_id": run_id}
+    summary = {"items": len(rows), "groups": 0, "alerts": 0, "run_id": run_id, "group_ids": []}
     with session_scope() as s:
         for members in groups.values():
             items = [by_id[i] for i in members]
             accounts = [it.author_handle for it in items]
             if len(items) < min_size or len(set(accounts)) < min_acc:
                 continue
-            met = group_metrics([it.published_at for it in items], accounts, [it.channel or "" for it in items])
+            met = group_metrics([it.published_at for it in items], accounts, [it.channel or it.source_type or "" for it in items])
             g = nx.Graph()
             for it in items:
                 g.add_node(it.author_handle, channel=it.channel)
@@ -131,17 +136,22 @@ def run(window_days: int = 7) -> dict[str, Any]:
                            "time": str(it.published_at), "url": it.url} for it in items_sorted[:50]],
                 "graph": {"nodes": g.number_of_nodes(), "edges": g.number_of_edges(), "density": round(nx.density(g), 3)},
             }
-            s.add(CoordinationGroup(run_id=run_id, score=met["score"], n_items=len(items), n_accounts=met["n_accounts"],
+            group = CoordinationGroup(run_id=run_id, score=met["score"], n_items=len(items), n_accounts=met["n_accounts"],
                                     n_channels=met["n_channels"], time_span_minutes=met["time_span_minutes"],
                                     synchrony=met["synchrony"], sample_text=items_sorted[0].text[:300],
-                                    item_ids=[it.id for it in items_sorted], edges=edges, evidence=evidence))
+                                    item_ids=[it.id for it in items_sorted], edges=edges, evidence=evidence,
+                                    investigation_id=investigation_id)
+            s.add(group)
+            s.flush()
             summary["groups"] += 1
+            summary["group_ids"].append(group.id)
             if met["score"] >= alert_score:
                 s.add(Alert(module="coordination", severity="high" if met["score"] >= 0.8 else "medium",
                             title=(f"Possible coordination: {len(items)} near-identical posts by {met['n_accounts']} "
                                    f"accounts in {met['time_span_minutes']:.0f} min"),
                             dedup_key=f"coord:{run_id}:{min(members)}", synthetic=all(it.synthetic for it in items),
                             evidence={**evidence, "score": met["score"], "sample_text": items_sorted[0].text[:300],
+                                      "group_id": group.id, "investigation_id": investigation_id,
                                       "label": "possible coordination (not proof of automation or intent)"}))
                 summary["alerts"] += 1
     log.info("coordination_done", extra=summary)

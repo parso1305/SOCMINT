@@ -141,11 +141,13 @@ class PoliteClient:
         data: dict[str, Any] | None = None,
         cache_key_extra: str = "",
         json_body: Any = None,
+        retries: int | None = None,
     ) -> bytes:
         """Fetch `url` and return the body bytes.
 
         cache_ttl: seconds to reuse a cached body (None = config default, 0 = no cache; use 0 for images
         so image files are never written to disk).
+        retries: override the client's retry count for this call (e.g. 0 for interactive collection).
         Raises OfflineError, RobotsDisallowed or HttpError.
         """
         if is_offline():
@@ -163,7 +165,8 @@ class PoliteClient:
 
         host = urlparse(url).netloc
         last_exc: Exception | None = None
-        for attempt in range(self.retries + 1):
+        max_retries = self.retries if retries is None else retries
+        for attempt in range(max_retries + 1):
             self._wait(host)
             try:
                 r = self._client.request(method, url, params=params, headers=headers, auth=auth, data=data, json=json_body)
@@ -182,7 +185,7 @@ class PoliteClient:
                 retry_after = r.headers.get("retry-after")
                 if retry_after and retry_after.isdigit():
                     time.sleep(min(int(retry_after), 60))
-            if attempt < self.retries:
+            if attempt < max_retries:
                 backoff = min(2**attempt * 1.5, 30)
                 if status == 429:  # throttled: back off well beyond the host's own interval
                     backoff = min(max(backoff, self._host_rate.get(host, self.default_rate)) * 2 ** (attempt + 1), 120)

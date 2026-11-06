@@ -69,14 +69,22 @@ def _link_factchecks(texts: list[str], keywords: list[str], fc_texts: dict[int, 
     return linked, dict(votes)
 
 
-def run(window_days: int | None = None) -> dict[str, Any]:
+def run(window_days: int | None = None, item_ids: list[int] | None = None,
+        investigation_id: int | None = None) -> dict[str, Any]:
+    """Cluster recent posts. With `item_ids`, only those posts (any age) are clustered (investigation scope)."""
     window_days = window_days or int(threshold("narratives.window_days", 14))
     now = utcnow()
     since = now - timedelta(days=window_days)
+    cols = (Item.id, Item.text, Item.published_at, Item.ingested_at, Item.synthetic)
     with session_scope() as s:
-        rows = s.execute(select(Item.id, Item.text, Item.published_at, Item.ingested_at, Item.synthetic)
-                         .where(Item.text != "")).all()
-    rows = [r for r in rows if (r.published_at or r.ingested_at) >= since]
+        if item_ids is None:
+            rows = s.execute(select(*cols).where(Item.text != "")).all()
+            rows = [r for r in rows if (r.published_at or r.ingested_at) >= since]
+        else:
+            rows = [r for i in range(0, len(item_ids), 500)
+                    for r in s.execute(select(*cols).where(Item.text != "", Item.id.in_(item_ids[i : i + 500]))).all()]
+            if rows:  # growth is measured against the newest post in scope, not the wall clock
+                now = max(r.published_at or r.ingested_at for r in rows)
     min_size = int(threshold("narratives.min_cluster_size", 5))
     if len(rows) < min_size * 2:
         return {"items": len(rows), "clusters": 0, "note": "not enough items in window"}
@@ -103,7 +111,7 @@ def run(window_days: int | None = None) -> dict[str, Any]:
     min24 = int(threshold("narratives.min_count_24h", 4))
     floor = float(threshold("narratives.growth_floor_per_day", 0.5))
     summary = {"items": len(rows), "clusters": len(clusters), "noise": int((labels < 0).sum()), "alerts": 0,
-               "run_id": run_id}
+               "run_id": run_id, "narrative_ids": []}
 
     with session_scope() as s:
         fc_rows = s.execute(select(FactCheck.id, FactCheck.title, FactCheck.claim_text)).all()
@@ -121,8 +129,10 @@ def run(window_days: int | None = None) -> dict[str, Any]:
             linked, votes = _link_factchecks([texts[i] for i in order], kw.get(c, []), fc_texts, is_tfidf(emb))
             n = Narrative(run_id=run_id, cluster_id=c, keywords=kw.get(c, []), size=len(idx), first_seen=min(times),
                           last_seen=max(times), growth_rate=growth, count_24h=c24, matched_factcheck_ids=linked,
-                          sample_item_ids=[rows[i].id for i in order[:10]])
+                          sample_item_ids=[rows[i].id for i in order[:10]], investigation_id=investigation_id)
             s.add(n)
+            s.flush()
+            summary["narrative_ids"].append(n.id)
             if growth >= growth_alert and c24 >= min24:
                 debunked = bool(linked)
                 synthetic = all(rows[i].synthetic for i in idx)
@@ -131,6 +141,7 @@ def run(window_days: int | None = None) -> dict[str, Any]:
                 s.add(Alert(module="narratives", severity="high" if debunked else "medium", title=title,
                             dedup_key=f"narr:{run_id}:{c}", synthetic=synthetic,
                             evidence={"run_id": run_id, "cluster_id": c, "size": len(idx), "count_24h": c24,
+                                      "narrative_id": n.id, "investigation_id": investigation_id,
                                       "prev_72h": prev72, "growth_rate": growth, "keywords": kw.get(c, []),
                                       "matched_factchecks": [{"id": f, "title": fc_titles.get(f), "votes": votes.get(f)}
                                                              for f in linked],
