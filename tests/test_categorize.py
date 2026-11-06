@@ -105,3 +105,20 @@ def test_zero_shot_raises_unavailable_when_model_missing(monkeypatch):
     monkeypatch.setattr(cz, "_zero_shot_pipeline", boom)
     with pytest.raises(cz.ZeroShotUnavailable):
         cz.zero_shot_labels(["Heavy rain in Pune"])
+
+
+def test_investigation_terms_do_not_count_toward_a_category():
+    """P2 (B3): a post collected because it says "flood" is not civic_safety just for saying "flood"."""
+    terms = {"en": ["Pune flood", "#PuneRains", "Demosagar dam"], "hi": ["बाढ़"], "mr": ["पूर"]}
+    only_terms = rule_labels("Pune flood: the Demosagar dam looks scary today #PuneRains", investigation_terms=terms)
+    assert [lab.label for lab in only_terms] == ["other"]
+    assert set(only_terms[0].evidence["matched_investigation_term"]["civic_safety"]) == {"flood", "dam"}
+    assert [lab.label for lab in rule_labels("पुणे में बाढ़ का पानी", investigation_terms=terms)] == ["other"]
+    beyond = rule_labels("Pune flood: NDRF rescue teams deployed, helpline 1077 active", investigation_terms=terms)
+    civic = next(lab for lab in beyond if lab.label == "civic_safety")
+    assert {"ndrf", "rescue", "helpline"} <= set(civic.evidence["keywords"] + sum(
+        civic.evidence["sublabel_keywords"].values(), []))
+    assert "flood" not in sum(civic.evidence["sublabel_keywords"].values(), civic.evidence["keywords"])
+    assert civic.evidence["matched_investigation_term"] == ["flood"]
+    # without investigation terms (global / tipline categorisation) nothing changes
+    assert rule_labels("Pune flood: the Demosagar dam looks scary today")[0].label == "civic_safety"

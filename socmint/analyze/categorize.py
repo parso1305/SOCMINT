@@ -84,14 +84,50 @@ def _kw_conf(n_hits: int) -> float:
     return round(min(base + step * max(n_hits - 1, 0), cap), 2)
 
 
-def rule_labels(text: str, sig: Signals | None = None) -> list[Label]:
-    """Keyword + signal rules. Pure function (no DB); returns at most one label per category."""
+def _investigation_term_keys(terms: dict[str, list[str]] | list[str] | None) -> list[str]:
+    """Investigation terms normalised the way `TermMatcher` normalises them ("#" dropped)."""
+    from socmint.ingest.base import flat_terms
+
+    keys = (match_text(t).lstrip("#").strip() for t in flat_terms(terms or []))
+    return [k for k in keys if k]
+
+
+def _is_investigation_term(keyword: str, term_keys: list[str]) -> bool:
+    """A category keyword is one of the investigation's own terms (or a word of a multi-word term)."""
+    for k in term_keys:
+        if keyword == k:
+            return True
+        if keyword.isascii() and re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", k):
+            return True
+        if not keyword.isascii() and keyword in k:  # Devanagari keywords match as substrings, as in TermMatcher
+            return True
+    return False
+
+
+def rule_labels(text: str, sig: Signals | None = None,
+                investigation_terms: dict[str, list[str]] | list[str] | None = None) -> list[Label]:
+    """Keyword + signal rules. Pure function (no DB); returns at most one label per category.
+
+    `investigation_terms`: the event's own search terms. Every collected post contains them, so a keyword hit
+    that is one of them does not count toward a category; it is kept in the evidence as
+    `matched_investigation_term` instead.
+    """
     from socmint.analyze.scam import keyword_hits
 
     sig = sig or Signals()
     t = match_text(text or "")
     cats = taxonomy()
     found: dict[str, Label] = {}
+    term_keys = _investigation_term_keys(investigation_terms)
+    skipped: dict[str, list[str]] = {}
+
+    def own(key: str, hits: list[str]) -> list[str]:
+        if not term_keys:
+            return hits
+        mine = [h for h in hits if _is_investigation_term(h, term_keys)]
+        if mine:
+            skipped.setdefault(key, []).extend(h for h in mine if h not in skipped.get(key, []))
+        return [h for h in hits if h not in mine]
 
     def put(lab: Label) -> None:
         cur = found.get(lab.label)
@@ -105,14 +141,16 @@ def rule_labels(text: str, sig: Signals | None = None) -> list[Label]:
     for key, c in cats.items():
         if not c.enabled or key == "other":
             continue
-        hits = keyword_hits(t, c.latin, c.deva)
-        sub_hits = {s: keyword_hits(t, lat, dev) for s, (lat, dev) in c.subs.items()}
+        hits = own(key, keyword_hits(t, c.latin, c.deva))
+        sub_hits = {s: own(key, keyword_hits(t, lat, dev)) for s, (lat, dev) in c.subs.items()}
         sub_hits = {s: h for s, h in sub_hits.items() if h}
         n = len(hits) + sum(len(h) for h in sub_hits.values())
         if n:
             best = max(sub_hits, key=lambda s: len(sub_hits[s])) if sub_hits else None
-            put(Label(key, best, _kw_conf(n), "rule", {"rule": "keywords", "keywords": hits[:8],
-                                                       "sublabel_keywords": {s: h[:6] for s, h in sub_hits.items()}}))
+            ev = {"rule": "keywords", "keywords": hits[:8], "sublabel_keywords": {s: h[:6] for s, h in sub_hits.items()}}
+            if key in skipped:
+                ev["matched_investigation_term"] = skipped[key][:8]
+            put(Label(key, best, _kw_conf(n), "rule", ev))
 
     def enabled(key: str) -> bool:
         return key in cats and cats[key].enabled
@@ -137,7 +175,10 @@ def rule_labels(text: str, sig: Signals | None = None) -> list[Label]:
     min_c = float(threshold("categorize.min_confidence", 0.5))
     labels = [lab for lab in found.values() if lab.confidence >= min_c]
     if not labels and enabled("other"):
-        labels = [Label("other", None, 1.0, "rule", {"rule": "fallback", "note": "no category rule fired"})]
+        ev = {"rule": "fallback", "note": "no category rule fired"}
+        if skipped:
+            ev["matched_investigation_term"] = {k: v[:8] for k, v in skipped.items()}
+        labels = [Label("other", None, 1.0, "rule", ev)]
     return sorted(labels, key=lambda lab: -lab.confidence)
 
 

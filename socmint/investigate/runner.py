@@ -185,7 +185,7 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     _link_top_authors(inv.id)
     enriched: dict[str, Any] = {}
     if enrich_after and new_ids:
-        enriched = enrich(sorted(new_ids), event=(cfg.kind == "event"))
+        enriched = enrich(sorted(new_ids), event=(cfg.kind == "event"), terms=cfg.terms)
     with session_scope() as s:
         row = s.get(Investigation, inv.id)
         row.last_collected_at = utcnow()
@@ -312,11 +312,12 @@ def _link_top_authors(inv_id: int) -> None:
 
 
 # ------------------------------------------------------------------------------------------- enrich
-def enrich(item_ids: list[int], event: bool = True) -> dict[str, Any]:
+def enrich(item_ids: list[int], event: bool = True, terms: dict[str, list[str]] | None = None) -> dict[str, Any]:
     """Language, entities, scam/impersonation signals, claim matching (events) and categories for posts.
 
     Scam artifacts become `indicators` exactly as in the tipline: only for likely/suspicious posts, never linked
     to a submission or sender. Zero-shot categories are added when enabled and available (else `degraded`).
+    `terms` (the investigation's keywords) never count toward a category: every collected post contains them.
     """
     from socmint.analyze import categorize as cz
     from socmint.understand.lang import detect_lang
@@ -331,7 +332,7 @@ def enrich(item_ids: list[int], event: bool = True) -> dict[str, Any]:
                 plat = (it.lang or "").split("-")[0].lower() or None
                 it.lang = det.code if (plat is None or det.code in ("hi", "mr", "hi-Latn")) else plat
                 sig, (ent, sres) = cz.compute_signals(it.text or "", claim_matching=event)
-                labels = cz.rule_labels(it.text or "", sig)
+                labels = cz.rule_labels(it.text or "", sig, investigation_terms=terms)
                 cz.store_labels(s, it.id, labels, "rule", synthetic=it.synthetic)
                 out["labels"].update(lab.label for lab in labels)
                 ents = ent.as_dict()

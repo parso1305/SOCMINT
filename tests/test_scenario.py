@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from socmint import scenario
 from socmint.core.db import session_scope
-from socmint.core.models import Account, Alert, CollectionRun, Investigation, Item
+from socmint.core.models import Account, Alert, CollectionRun, Investigation, Item, ItemLabel
 
 
 def test_scenario_data_is_fictional_and_synthetic():
@@ -72,3 +72,27 @@ def test_seed_investigations_end_to_end():
         assert s.scalar(select(func.count(CollectionRun.id)).where(CollectionRun.synthetic.is_(False))) == 0
         assert s.scalar(select(func.count(Alert.id)).where(Alert.module == "market")) >= 1
     assert report.summary(gid)["counts"]["accounts"] == 8
+
+
+def test_event_categories_are_not_just_the_event_theme():
+    """P2 (B3): the demo flood event's categories say something beyond "it is about floods"."""
+    from socmint import fixtures
+    from socmint.analyze import impersonation
+    from socmint.demo import seed_investigations
+    from socmint.ingest.registry import sync_brands
+    from socmint.investigate import report
+    from socmint.understand.entities import clear_caches
+
+    sync_brands()
+    impersonation.brands.cache_clear()
+    fixtures.load_symbols()
+    fixtures.load_market()
+    clear_caches()
+    ev = report.summary(seed_investigations()["event"]["id"])
+    cats, total = ev["by_category"], ev["counts"]["posts"]
+    assert {"scam", "misinformation", "brand_impersonation", "civic_safety"} <= set(cats)
+    assert cats["civic_safety"] / total < 0.75, cats  # was 268/288 (93%) when the event terms counted
+    with session_scope() as s:  # every civic_safety label rests on a keyword beyond the event's own terms
+        for lab in s.scalars(select(ItemLabel).where(ItemLabel.label == "civic_safety")).all():
+            kws = lab.evidence["keywords"] + sum(lab.evidence["sublabel_keywords"].values(), [])
+            assert kws and not {"flood", "floods", "dam", "पूर", "बाढ़"} & set(kws), lab.evidence
