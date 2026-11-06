@@ -20,6 +20,9 @@ KINDS = {"Event": "event", "Person / Account": "subject", "Group": "group"}
 STATUS_COLOR = {"ok": "green", "offline": "gray", "missing_key": "orange", "unsupported": "gray",
                 "blocked_by_robots": "orange", "error": "red"}
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+# Posts table: pixel widths that fit the main area at 1366 px with the sidebar open (no horizontal scrolling).
+POSTS_COLUMN_WIDTHS = {"time (UTC)": 95, "platform": 75, "author": 135, "text": 330, "categories": 150, "lang": 45,
+                       "link": 45}
 
 
 def demo_mode() -> bool:
@@ -114,10 +117,37 @@ def posts_table(posts: list[dict[str, Any]], platforms: list[str] | None = None,
             continue
         if q and q not in (p["text"] or "").lower() and q not in (p["author_handle"] or "").lower():
             continue
-        rows.append({"id": p["id"], "time (UTC)": p["published_at"], "platform": p["platform"],
-                     "author": p["author_handle"] or p["channel"] or "", "lang": p["lang"],
-                     "categories": ", ".join(labs), "text": (p["text"] or "")[:160], "url": p["url"]})
+        text = " ".join((p["text"] or "").split())
+        rows.append({"time (UTC)": p["published_at"], "platform": p["platform"],
+                     "author": p["author_handle"] or p["channel"] or "",
+                     "text": text if len(text) <= 140 else text[:139].rstrip() + "…",
+                     "categories": ", ".join(labs), "lang": p["lang"], "link": p["url"], "id": p["id"]})
     return pd.DataFrame(rows)
+
+
+def label_evidence(lab: dict[str, Any]) -> str:
+    """One readable line for a label's evidence (keywords, rule, fact-check, indicators...)."""
+    ev = lab.get("evidence") or {}
+    parts = [f"rule `{ev['rule']}`"] if ev.get("rule") else []
+    kws = list(ev.get("keywords") or []) + [k for ks in (ev.get("sublabel_keywords") or {}).values() for k in ks]
+    if kws:
+        parts.append("keywords: " + ", ".join(dict.fromkeys(kws)))
+    if ev.get("reasons"):
+        parts.append("scam signals: " + ", ".join(ev["reasons"][:5]))
+    if ev.get("factchecks"):
+        parts.append("fact-check: " + ev["factchecks"][0].get("title", ""))
+    if ev.get("findings"):
+        parts.append("brand findings: " + ", ".join(str(f.get("value") or f.get("host") or f.get("brand"))
+                                                    for f in ev["findings"][:3]))
+    if ev.get("tickers"):
+        parts.append("tickers: " + ", ".join(ev["tickers"]))
+    if ev.get("matched_investigation_term"):
+        mit = ev["matched_investigation_term"]
+        terms = mit if isinstance(mit, list) else [t for ts in mit.values() for t in ts]
+        parts.append("not counted (investigation's own terms): " + ", ".join(dict.fromkeys(terms)))
+    if ev.get("note") and not parts[1:]:
+        parts.append(ev["note"])
+    return "; ".join(parts) or "—"
 
 
 def subject_activity(d: dict[str, Any]) -> pd.DataFrame:

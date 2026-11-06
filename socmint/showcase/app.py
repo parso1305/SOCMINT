@@ -128,8 +128,15 @@ with posts_tab:
     if table.empty:
         st.info("No posts match.")
     else:
-        st.dataframe(table, hide_index=True, width="stretch",
-                     column_config={"url": st.column_config.LinkColumn("url", display_text="open")})
+        widths = data.POSTS_COLUMN_WIDTHS
+        st.dataframe(table, hide_index=True, width="stretch", column_order=list(widths),
+                     column_config={**{c: st.column_config.Column(c, width=w) for c, w in widths.items()},
+                                    "time (UTC)": st.column_config.DatetimeColumn("time (UTC)", format="D MMM HH:mm",
+                                                                                  width=widths["time (UTC)"]),
+                                    "text": st.column_config.TextColumn("text", width=widths["text"],
+                                                                        help="First 140 characters; full text below"),
+                                    "link": st.column_config.LinkColumn("link", display_text="open",
+                                                                        width=widths["link"])})
         pid = st.selectbox("Post detail", table["id"].tolist(),
                            format_func=lambda i: f"#{i} " + next(p["text"][:80] for p in d["posts"] if p["id"] == i))
         p = next(x for x in d["posts"] if x["id"] == pid)
@@ -141,9 +148,10 @@ with posts_tab:
                 st.markdown(f"[Original post]({p['url']})")
             for lab in p["labels"]:
                 st.markdown(f"- **{lab['label']}**" + (f" / {lab['sublabel']}" if lab.get("sublabel") else "")
-                            + f" · {lab['method']} · confidence {lab['confidence']:.2f}")
+                            + f" · {lab['method']} · confidence {lab['confidence']:.2f}  \n"
+                            + f"  Evidence: {data.label_evidence(lab)}")
             st.markdown("**Why it is in this investigation**")
-            st.json(p["matched_by"], expanded=False)
+            st.json(p["matched_by"], expanded=True)
             with st.expander("Entities, signals and engagement"):
                 st.json({"entities": p["entities"], "signals": p["signals"], "engagement": p["engagement"],
                          "hashtags": p["hashtags"], "mentions": p["mentions"], "urls": p["urls"]}, expanded=False)

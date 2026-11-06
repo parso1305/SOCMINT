@@ -121,3 +121,23 @@ def test_form_helpers_and_network(showcase_db, monkeypatch):
     assert n >= 8 and "co_posts" in dot and dot.startswith("digraph")
     findings = data.key_findings(data.load(ids["event"]))
     assert 3 <= len(findings) <= 5 and findings[0].startswith("Possible coordination")
+
+
+def test_posts_table_puts_text_and_categories_first(showcase_db, monkeypatch):
+    """P7 (B4): the columns an analyst reads come first and fit at 1366 px; the id is last and hidden."""
+    from socmint.showcase import data
+
+    url, ids = showcase_db
+    _use(url, monkeypatch)
+    d = data.load(ids["event"])
+    table = data.posts_table(d["posts"])
+    assert list(table.columns) == ["time (UTC)", "platform", "author", "text", "categories", "lang", "link", "id"]
+    assert table["text"].str.len().max() <= 141 and table["text"].str.endswith("…").any()
+    assert sum(data.POSTS_COLUMN_WIDTHS.values()) <= 880  # main area at 1366 px with the sidebar open
+    at = AppTest.from_file(str(APP), default_timeout=120)
+    at.session_state["inv_id"] = ids["event"]
+    at.run()
+    shown = next(f for f in at.dataframe if "categories" in f.value.columns)
+    assert "id" not in shown.proto.column_order and list(shown.proto.column_order)[3] == "text"
+    detail = "\n".join(m.value for m in at.markdown)
+    assert "Evidence:" in detail  # each label's evidence is shown in the post detail
