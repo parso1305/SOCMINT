@@ -34,6 +34,43 @@ class ItemIn(BaseModel):
     media_hash: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
     synthetic: bool = False
+    # post fields (filled by social collectors; empty for news/feeds)
+    author_id: str | None = None
+    author_display_name: str | None = None
+    hashtags: list[str] = Field(default_factory=list)
+    mentions: list[str] = Field(default_factory=list)
+    urls: list[str] = Field(default_factory=list)
+    engagement: dict[str, Any] = Field(default_factory=dict)
+    reply_to_external_id: str | None = None
+    forwarded_from: str | None = None
+    media: list[dict[str, Any]] = Field(default_factory=list)
+    text_en: str | None = None
+
+
+class AccountIn(BaseModel):
+    """Public profile of an account/channel, exactly as far as the platform's official API exposes it."""
+
+    platform: str
+    platform_id: str
+    handle: str | None = None
+    display_name: str | None = None
+    url: str | None = None
+    created_at: datetime | None = None
+    followers: int | None = None
+    following: int | None = None
+    posts_count: int | None = None
+    description: str | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)
+    synthetic: bool = False
+
+    @property
+    def key(self) -> str:
+        return account_key(self.platform, self.platform_id)
+
+
+def account_key(platform: str, platform_id: str) -> str:
+    """Stable account key used in `edges`: "platform:platform_id"."""
+    return f"{platform}:{platform_id}"
 
 
 class FactCheckIn(BaseModel):
@@ -84,9 +121,16 @@ class FetchResult(BaseModel):
     domains: list[DomainIn] = Field(default_factory=list)
     market: list[MarketIn] = Field(default_factory=list)
     symbols: list[dict[str, Any]] = Field(default_factory=list)
+    accounts: list[AccountIn] = Field(default_factory=list)
 
     def count(self) -> int:
         return sum(len(x) for x in (self.items, self.factchecks, self.indicators, self.domains, self.market, self.symbols))
+
+    def extend(self, other: FetchResult) -> FetchResult:
+        """Append every list of `other` (used when a source runs several queries)."""
+        for f in type(self).model_fields:
+            getattr(self, f).extend(getattr(other, f))
+        return self
 
 
 class Reason(BaseModel):

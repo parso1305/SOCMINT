@@ -67,6 +67,122 @@ class Item(Base):
     media_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Post fields (M9). All nullable so rows from before the migration stay valid.
+    author_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    author_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hashtags: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    mentions: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    urls: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    engagement: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    reply_to_external_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    forwarded_from: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    media: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)  # [{type, url, phash}]; files never stored
+    text_en: Mapped[str | None] = mapped_column(Text, nullable=True)  # translation: later
+
+
+class Account(Base):
+    """A public account/channel/page as the platform's official API returns it (public fields only)."""
+
+    __tablename__ = "accounts"
+    __table_args__ = (UniqueConstraint("platform", "platform_id", name="uq_account_platform_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    platform: Mapped[str] = mapped_column(String(30), index=True)
+    platform_id: Mapped[str] = mapped_column(String(255))
+    handle: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # account creation, if the API gives it
+    followers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    following: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    posts_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)  # public bio
+    meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Investigation(Base):
+    """An analyst-defined target: an event, a subject (public account(s)) or a group of accounts."""
+
+    __tablename__ = "investigations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # event | subject | group
+    name: Mapped[str] = mapped_column(String(300), unique=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    purpose: Mapped[str] = mapped_column(Text)  # required: why this target is monitored
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | paused | archived
+    config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_analysis: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class InvestigationItem(Base):
+    __tablename__ = "investigation_items"
+    __table_args__ = (UniqueConstraint("investigation_id", "item_id", name="uq_inv_item"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int] = mapped_column(Integer, index=True)
+    item_id: Mapped[int] = mapped_column(Integer, index=True)
+    matched_by: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # which source/term/handle matched
+    matched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class InvestigationAccount(Base):
+    __tablename__ = "investigation_accounts"
+    __table_args__ = (UniqueConstraint("investigation_id", "account_id", name="uq_inv_account"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int] = mapped_column(Integer, index=True)
+    account_id: Mapped[int] = mapped_column(Integer, index=True)
+    role: Mapped[str] = mapped_column(String(20))  # subject | member | top_author
+    added_by: Mapped[str] = mapped_column(String(20))  # analyst | coordination | collector
+
+
+class ItemLabel(Base):
+    """Category label on a post. Analyst labels override rule / zero-shot labels in views."""
+
+    __tablename__ = "item_labels"
+    __table_args__ = (UniqueConstraint("item_id", "label", "method", name="uq_item_label_method"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(Integer, index=True)
+    label: Mapped[str] = mapped_column(String(50), index=True)
+    sublabel: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)  # analyst removal = 0.0
+    method: Mapped[str] = mapped_column(String(20))  # rule | zero_shot | analyst
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Edge(Base):
+    """Network edge for graph views: account -> account / URL / hashtag, derived from one post."""
+
+    __tablename__ = "edges"
+    __table_args__ = (UniqueConstraint("kind", "src", "dst", "item_id", name="uq_edge"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # forward|reply|mention|shares_url|uses_hashtag|co_posts
+    src: Mapped[str] = mapped_column(String(300), index=True)  # account key "platform:platform_id"
+    dst: Mapped[str] = mapped_column(Text)  # account key, URL or "#hashtag"
+    item_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    investigation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class CollectionRun(Base):
+    __tablename__ = "collection_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(100))
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ok | missing_key | error | blocked_by_robots | offline | unsupported
+    status: Mapped[str] = mapped_column(String(30))
+    fetched: Mapped[int] = mapped_column(Integer, default=0)
+    new: Mapped[int] = mapped_column(Integer, default=0)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class FactCheck(Base):
@@ -145,6 +261,7 @@ class Narrative(Base):
     matched_factcheck_ids: Mapped[list[Any]] = mapped_column(JSON, default=list)
     sample_item_ids: Mapped[list[Any]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    investigation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # set by scoped runs
 
 
 class CoordinationGroup(Base):
@@ -164,6 +281,7 @@ class CoordinationGroup(Base):
     edges: Mapped[list[Any]] = mapped_column(JSON, default=list)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    investigation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # set by scoped runs
 
 
 class Alert(Base):
