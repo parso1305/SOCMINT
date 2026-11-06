@@ -1,9 +1,23 @@
-# Small stopword lists for cluster keywords (class-based TF-IDF). Extend freely.
+# Stopword lists for cluster keywords (class-based TF-IDF). Extend freely.
+# scikit-learn's ENGLISH_STOP_WORDS is merged in code; tokens shorter than 3 characters are always dropped.
 en: [the, a, an, and, or, of, in, on, at, to, for, from, by, with, is, are, was, were, be, been, this, that, these,
   those, it, its, as, will, has, have, had, not, "no", "yes", all, any, now, today, near, new, says, said, after, before,
   about, into, over, more, than, you, your, we, our, they, their, he, she, his, her, who, what, why, how, is, can,
-  share, everyone, update, real, video, photo, viral, rs, pls, please, just, also, very]
+  share, everyone, update, real, video, photo, viral, rs, pls, please, just, also, very,
+  # conversational fillers that sklearn's list does not cover
+  going, getting, got, gets, gonna, worse, better, really, still, like, know, think, look, looks, looking, see, seen,
+  need, needs, want, make, makes, made, come, coming, came, guys, okay, lol, omg, true, sure, let, lets, tell, told,
+  happening, happened, right, thing, things, way, lot]
 hi: [का, के, की, है, हैं, में, से, को, पर, और, यह, वह, था, थे, थी, हो, हुआ, गया, गई, लिए, कि, भी, तो, ही, नहीं, एक,
-  अपने, कर, रहा, रही, रहे, दिया, किया, जा, बाद, साथ, तक, सभी, लें]
+  अपने, कर, रहा, रही, रहे, दिया, किया, जा, बाद, साथ, तक, सभी, लें,
+  बहुत, अब, क्या, कुछ, कोई, सब, जो, वो, ये, इस, उस, इसे, उसे, होगा, होगी, होंगे, रहें, करें, करो, करना, करने, जाता,
+  जाती, जाते, गए, हुए, हुई, अभी, यहाँ, वहाँ, कैसे, क्यों, लेकिन, अगर, सकते, सकता, सकती, वाला, वाली, वाले, दें, देखो]
 mr: [आहे, आहेत, आणि, व, या, हा, ही, हे, की, ला, ने, चा, ची, चे, मध्ये, वर, पण, तर, असे, असा, होते, होता, केले,
-  झाले, नाही, एक, सर्व, आता, काय, का, म्हणून, होणार]
+  झाले, नाही, एक, सर्व, आता, काय, का, म्हणून, होणार,
+  आम्ही, तुम्ही, आपण, आपल्या, खूप, अजून, कृपया, होती, असून, आले, आली, झाली, करा, करावे, केली, त्या, त्यांनी, त्याचा,
+  त्याची, त्याचे, येथे, तिथे, कसे, कधी, म्हणजे, मात्र, पाहिजे]
+# Hinglish (Hindi in Latin script)
+hinglish: [hai, hain, ka, ki, ke, ko, se, me, mein, par, aur, nahi, nahin, na, hoga, hogi, honge, raha, rahi, rahe, tha,
+  thi, the, ho, hua, hui, hue, gaya, gayi, gaye, kar, karo, karna, karne, kya, kyu, kyun, kuch, koi, sab, bhi, toh, to,
+  hi, ye, yeh, wo, woh, jo, ab, abhi, bahut, bohot, yaar, bhai, log, sabko, apna, apne, wala, wali, wale, diya, kiya,
+  dekho, chahiye, kaise, agar, lekin, ji, haan]

@@ -91,6 +91,9 @@ def test_event_categories_are_not_just_the_event_theme():
     ev = report.summary(seed_investigations()["event"]["id"])
     cats, total = ev["by_category"], ev["counts"]["posts"]
     assert {"scam", "misinformation", "brand_impersonation", "civic_safety"} <= set(cats)
+    rumour = [n for n in ev["narratives"] if {"demosagar", "dam", "burst"} & set(n["keywords"][:4])]
+    assert rumour, [n["keywords"] for n in ev["narratives"]]  # P3: the dam rumour has meaningful keywords
+    assert not any({"going", "getting", "worse"} & set(n["keywords"]) for n in ev["narratives"])
     assert cats["civic_safety"] / total < 0.75, cats  # was 268/288 (93%) when the event terms counted
     with session_scope() as s:  # every civic_safety label rests on a keyword beyond the event's own terms
         for lab in s.scalars(select(ItemLabel).where(ItemLabel.label == "civic_safety")).all():

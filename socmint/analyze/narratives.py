@@ -8,6 +8,7 @@ import re
 import uuid
 from collections import Counter
 from datetime import timedelta
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -26,16 +27,29 @@ log = get_logger(__name__)
 _TOKEN = re.compile(r"[a-zऀ-ॿ][a-z0-9ऀ-ॿ]+")  # keeps Devanagari matras inside words
 
 
-def _stopwords() -> set[str]:
+_NAMED = re.compile(r"#([\wऀ-ॿ]+)|\b([A-Z][A-Za-z0-9]+)")
+
+
+@lru_cache(maxsize=1)
+def _stopwords() -> frozenset[str]:
+    """config/stopwords.yaml (en/hi/mr/Hinglish fillers) plus scikit-learn's English list."""
+    from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+
     cfg = load_config("stopwords") or {}
-    return {match_text(str(w)) for ws in cfg.values() for w in (ws or [])}
+    return frozenset({match_text(str(w)) for ws in cfg.values() for w in (ws or [])} | set(ENGLISH_STOP_WORDS))
 
 
 def ctfidf_keywords(docs_by_cluster: dict[int, list[str]], top_n: int) -> dict[int, list[str]]:
-    """Class-based TF-IDF: tf(t,c)/|c| * log(1 + A / f(t)), A = mean words per class."""
+    """Class-based TF-IDF: tf(t,c)/|c| * log(1 + A / f(t)), A = mean words per class.
+
+    Stopwords and tokens shorter than 3 characters are dropped; on equal scores, words used as a hashtag or
+    capitalised (place and other names) come first.
+    """
     stop = _stopwords()
-    counts = {c: Counter(t for d in docs for t in _TOKEN.findall(match_text(d)) if t not in stop and not t.isdigit())
+    counts = {c: Counter(t for d in docs for t in _TOKEN.findall(match_text(d))
+                         if len(t) >= 3 and t not in stop and not t.isdigit())
               for c, docs in docs_by_cluster.items()}
+    named = {match_text(a or b) for docs in docs_by_cluster.values() for d in docs for a, b in _NAMED.findall(d or "")}
     total_f: Counter = Counter()
     for cnt in counts.values():
         total_f.update(cnt)
@@ -43,8 +57,8 @@ def ctfidf_keywords(docs_by_cluster: dict[int, list[str]], top_n: int) -> dict[i
     out = {}
     for c, cnt in counts.items():
         size = sum(cnt.values()) or 1
-        scored = {t: (n / size) * math.log(1 + avg_words / total_f[t]) for t, n in cnt.items()}
-        out[c] = [t for t, _ in sorted(scored.items(), key=lambda kv: -kv[1])[:top_n]]
+        scored = {t: round((n / size) * math.log(1 + avg_words / total_f[t]), 9) for t, n in cnt.items()}
+        out[c] = [t for t, _ in sorted(scored.items(), key=lambda kv: (-kv[1], kv[0] not in named))[:top_n]]
     return out
 
 

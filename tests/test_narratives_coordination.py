@@ -83,3 +83,28 @@ def test_hate_module_disabled():
     from socmint.analyze import hate
 
     assert not hate.is_enabled() and hate.get_classifier().classify("x") is None and hate.run()["enabled"] is False
+
+
+def test_narrative_keywords_skip_filler_words():
+    """P3 (B3): the demo dam rumour is described by what it is about, not by "going, getting, worse"."""
+    from socmint import scenario
+    from socmint.analyze.narratives import ctfidf_keywords
+
+    posts = scenario.event_posts()
+    rumour = [p.text for p in posts if p.meta["fixture"] == "rumour" and p.lang == "en"]
+    civic = [p.text for p in posts if p.meta["fixture"] == "civic"]
+    kw = ctfidf_keywords({0: rumour, 1: civic}, 6)
+    assert {"demosagar", "dam", "burst"} & set(kw[0][:4]), kw[0]
+    assert not {"going", "getting", "worse", "is", "this", "hai", "ka"} & set(kw[0] + kw[1]), kw
+    assert all(len(t) >= 3 for t in kw[0] + kw[1])
+    hinglish = ctfidf_keywords({0: ["Viman Nagar mein bahut paani bhar gaya hai, ab kya hoga", "paani bhar gaya hai yaar"],
+                                1: ["free bus travel", "bus free city"]}, 4)
+    assert not {"hai", "mein", "kya", "hoga", "yaar", "bahut"} & set(hinglish[0]), hinglish
+
+
+def test_ctfidf_ties_prefer_hashtags_and_names():
+    from socmint.analyze.narratives import ctfidf_keywords
+
+    kw = ctfidf_keywords({0: ["water entered houses #Kharadi", "Kharadi water entered houses"],
+                          1: ["bus fare free", "free bus fare"]}, 4)
+    assert kw[0][0] == "kharadi", kw
