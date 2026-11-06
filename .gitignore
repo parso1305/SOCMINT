@@ -5,6 +5,7 @@ __pycache__/
 data/*.db
 data/*.db-*
 data/media/
+data/exports/
 data/cache/
 data/models/
 .pytest_cache/
