@@ -84,7 +84,7 @@ c3.metric("Flagged posts", h["flagged"], help="Posts with a category other than 
 c4.metric("Sources", h["sources"])
 chips = data.source_status(d)
 if chips:
-    st.markdown(" ".join(f":{c['color']}-background[{c['source']}: {c['status']} ({c['new']} new)]" for c in chips))
+    st.markdown(" ".join(f":{c['color']}-background[{c['text']}]" for c in chips))
 
 ov, posts_tab, people, network, evidence = st.tabs(
     ["Overview", "Posts", "People & accounts", "Network", "Evidence & export"])
@@ -252,7 +252,8 @@ with evidence:
     st.subheader("Collection log")
     runs = s["collection"]["runs"]
     if runs:
-        st.dataframe(pd.DataFrame(runs), hide_index=True, width="stretch")
+        st.dataframe(pd.DataFrame([{"name": data.source_label(r["source"]), **r} for r in runs]), hide_index=True,
+                     width="stretch")
     st.subheader("Export")
     st.caption("Writes posts, accounts, edges, indicators, summary and a SHA-256 manifest. Every export is audited.")
     e1, e2 = st.columns(2)

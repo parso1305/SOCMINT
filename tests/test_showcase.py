@@ -161,3 +161,26 @@ def test_posts_over_time_bucket_follows_the_span():
     df, label = frame(29 * 24, step=5)
     assert label == "day" and len(df) == 29
     assert data.posts_over_time({"summary": {"by_hour": []}})[0].empty
+
+
+def test_source_chips_use_friendly_names(showcase_db, monkeypatch):
+    """P10: chips say "Bluesky (demo) · 77 new", not "demo_bluesky: ok (77 new)"; live feeds use their publisher."""
+    from socmint.showcase import data
+
+    assert data.source_label("demo_bluesky") == "Bluesky (demo)"
+    assert data.source_label("demo_news_rss") == "News (demo)"
+    assert data.source_label("indianexpress_india") == "Indian Express"
+    assert data.source_label("gdelt_india") == "GDELT"
+    assert data.source_label("telegram_public") == "Telegram"
+    assert data.source_label("bluesky") == "Bluesky"
+    assert data.source_label("something_new") == "Something New"
+    url, ids = showcase_db
+    _use(url, monkeypatch)
+    chips = data.source_status(data.load(ids["event"]))
+    assert {c["label"] for c in chips} >= {"Bluesky (demo)", "YouTube (demo)", "News (demo)"}
+    assert all(c["text"].startswith(c["label"] + " · ") and c["text"].endswith(" new") for c in chips)
+    at = AppTest.from_file(str(APP), default_timeout=120)
+    at.session_state["inv_id"] = ids["event"]
+    at.run()
+    md = "\n".join(m.value for m in at.markdown)
+    assert "Bluesky (demo) · " in md and "demo_bluesky:" not in md

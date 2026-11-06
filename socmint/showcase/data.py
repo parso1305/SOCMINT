@@ -44,10 +44,35 @@ def headline(d: dict[str, Any]) -> dict[str, int]:
             "sources": len(s["collection"]["latest_by_source"]) or s["counts"]["sources"]}
 
 
+_PLATFORM_NAMES = {"bluesky": "Bluesky", "mastodon": "Mastodon", "telegram": "Telegram", "telegram_channels": "Telegram",
+                   "reddit": "Reddit", "youtube": "YouTube", "news_rss": "News", "news": "News", "rss": "News",
+                   "gdelt": "GDELT", "google_factcheck": "Google Fact Check"}
+
+
+def source_label(name: str) -> str:
+    """Friendly name for a source: "demo_bluesky" -> "Bluesky (demo)", a feed -> its `publisher` in sources.yaml."""
+    from socmint.ingest.registry import source_configs
+
+    if name.startswith("demo_"):
+        rest = name.removeprefix("demo_")
+        return f"{_PLATFORM_NAMES.get(rest, rest.replace('_', ' ').title())} (demo)"
+    cfg = next((c for c in source_configs() if c.get("name") == name), None)
+    if cfg and cfg.get("publisher"):
+        return str(cfg["publisher"])
+    if cfg and cfg.get("type") in _PLATFORM_NAMES:
+        return _PLATFORM_NAMES[cfg["type"]]
+    return _PLATFORM_NAMES.get(name) or name.replace("_", " ").title()
+
+
 def source_status(d: dict[str, Any]) -> list[dict[str, Any]]:
-    return [{"source": k, "status": r["status"], "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
-             "color": STATUS_COLOR.get(r["status"], "gray")}
-            for k, r in sorted(d["summary"]["collection"]["latest_by_source"].items())]
+    out = []
+    for k, r in d["summary"]["collection"]["latest_by_source"].items():
+        label = source_label(k)
+        state = f"{r['new']} new" if r["status"] == "ok" else r["status"].replace("_", " ")
+        out.append({"source": k, "label": label, "text": f"{label} · {state}", "status": r["status"],
+                    "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
+                    "color": STATUS_COLOR.get(r["status"], "gray")})
+    return sorted(out, key=lambda c: c["label"].lower())
 
 
 def key_findings(d: dict[str, Any], n: int = 5) -> list[str]:
