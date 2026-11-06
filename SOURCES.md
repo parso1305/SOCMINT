@@ -46,6 +46,10 @@ Checked but not used: Times of India (works, but redundant), PIB RSS (press rele
 Loksatta / Lokmat (the feed URLs tried redirect to HTML pages).
 
 ## GDELT DOC 2.0 API (no key)
+**Investigations (2026-11-06):** an event makes a single OR query of its terms with `startdatetime` (at most 89 days
+back) and **no retries** (`event_retries: 0`), so a 429 fails that source in seconds instead of minutes. On
+2026-11-06 GDELT still answered HTTP 429 to this IP; the source failed cleanly and the other sources completed.
+
 `https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json` with four India keyword queries
 (see sources.yaml). Stores article title, URL, domain and language only. GDELT asks for **≤1 request
 per 5 s** and penalises bursts per IP. The query format was verified live (HTTP 200), but our first run
@@ -54,6 +58,42 @@ fetches are rate-limited too. **Status: endpoint verified working (HTTP 200 on 2
 been throttled (HTTP 429) for over 2 hours since that first burst, even for single requests.** The source stays
 enabled and fails cleanly; it should recover once GDELT lifts the penalty. If it doesn't, write to the address
 in GDELT's 429 message, or switch to their bulk files.
+
+## Bluesky (no key) — verified 2026-11-06
+Official AT Protocol AppView and Jetstream endpoints only; no login, no app password.
+
+| Use | Endpoint | Auth | Status |
+|---|---|---|---|
+| Profile | `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile` (`getProfiles`) | none | live |
+| Account posts | `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed` (pinned posts and reposts skipped) | none | live |
+| Hydrate posts | `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts` (25 URIs per call) | none | live |
+| Keyword search | `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts` | — | **HTTP 403** without auth (checked 2026-11-06) |
+| Keyword search fallback | `wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post` | none | live: about 26–35 posts/s; bounded listen (60 s / 20,000 posts), terms matched locally, matches hydrated with `getPosts` |
+
+- robots.txt: `public.api.bsky.app` allows all; the Jetstream host returns 404 for robots.txt (treated as allowed).
+- Rate limit used: 1 request/s per host (`rate_limit_s: 1`).
+- `api.bsky.app/xrpc/app.bsky.feed.searchPosts` currently answers without auth, but we **do not** use it: switching
+  hosts to get past the 403 on the public endpoint would be working around a block. Using it needs an explicit decision
+  (or an authenticated app password for a project account).
+- Opt-out: accounts labelled `!no-unauthenticated` are not collected (profile check and per post).
+- Limitation: the Jetstream fallback only sees posts made while it listens, so it rarely finds rare terms. On
+  2026-11-06 a 60 s listen scanned 2,140 posts and none matched "flood / बाढ़".
+
+## Mastodon (no key) — verified 2026-11-06
+Instance REST API, unauthenticated, read-only. Instances are listed in `sources.yaml` (`mastodon.social`).
+
+| Use | Endpoint | Status |
+|---|---|---|
+| Event hashtags | `GET /api/v1/timelines/tag/{tag}` (paginated by `max_id`, stops at `since`) | live |
+| Account lookup | `GET /api/v1/accounts/lookup?acct=user` on the account's home instance | live |
+| Account posts | `GET /api/v1/accounts/{id}/statuses?exclude_reblogs=true` | live |
+
+- Rate limit: mastodon.social allows 300 unauthenticated requests per 5 minutes per IP; we use 1 request per 2 s.
+- Keyword (full-text) search needs an authenticated account, so events search **hashtags only**: each term becomes
+  one tag (`Pune flood` → `#Puneflood`), and the matched terms are recorded per post.
+- Opt-out: accounts with `noindex: true` or `indexable: false` are skipped. Many remote accounts set this: in the
+  2026-11-06 live test 63 tag-timeline posts were skipped for that reason and 37 were stored.
+- The instance's own terms apply; robots.txt is honoured.
 
 ## Threat feeds
 | Name | Access | Status | Terms |
@@ -81,6 +121,7 @@ a reported URL is added as a domain indicator, except shared hosting and shorten
 ## Free-key sources (enabled automatically when the key is in `.env`)
 | Name | Key(s) | Notes |
 |---|---|---|
+| (investigations) | as below | YouTube, Reddit, Telegram and the Fact Check API also serve investigations: keyword search (YouTube `search.list`; Reddit search **only within configured subreddits**; Telegram search **only within listed public channels**) and accounts (YouTube `channels.list` + uploads playlist; Reddit `/user/{name}/about` + `/submitted`; Telegram public broadcast channels only). Not tested live (no keys on the build machine); tested against recorded fixtures. Real channels/subreddits are added only with approval. |
 | google_factcheck | `GOOGLE_FACTCHECK_API_KEY` | Fact Check Tools `claims:search` by keyword × language (en/hi/mr). Stores claim text, rating, publisher, URL. |
 | youtube_keywords | `YOUTUBE_API_KEY` | `search.list` (100 units) + `commentThreads.list` (1 unit). The per-run budget (`max_units_per_run: 1500`) stays far below the 10,000/day quota. **Keywords are proposals awaiting approval.** |
 | reddit_india | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | App-only OAuth, `/r/{sub}/new`. Non-commercial use under Reddit Data API terms. **Subreddits are proposals awaiting approval.** |
@@ -88,6 +129,6 @@ a reported URL is added as a domain indicator, except shared hosting and shorten
 | tipline bot | `TELEGRAM_BOT_TOKEN` | Bot API via python-telegram-bot. |
 | Safe Browsing | `GOOGLE_SAFE_BROWSING_KEY` | Optional URL reputation during scam scoring. |
 
-## Excluded in v0
-X/Twitter (no free tier), Instagram/Facebook (no lawful free access to others' content), WhatsApp
+## Excluded
+X/Twitter (no free tier), Instagram/Facebook (no lawful free access to others' content), LinkedIn, WhatsApp
 (later, tipline only, through the Business API). Nothing is scraped from login-walled or CAPTCHA-protected pages.

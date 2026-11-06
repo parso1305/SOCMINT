@@ -6,7 +6,12 @@ An India-focused open-source intelligence prototype built only on free, lawful s
 - **detects scams and brand impersonation** (KYC/account-block, digital arrest, investment tips, task jobs,
   lottery, fake customer care, loan apps, utility disconnection and courier scams; lookalike domains);
 - **flags stock-promotion (pump-and-dump) manipulation risk** from mention spikes combined with NSE volume;
-- **maps misinformation narratives and possible coordinated posting**.
+- **maps misinformation narratives and possible coordinated posting**;
+- **runs analyst-directed investigations** of three kinds: an **event** (keywords/hashtags), a **subject** (named
+  public accounts) or a **group** (several accounts, e.g. promoted from a possible-coordination group). Each
+  investigation collects posts and public profiles from Bluesky, Mastodon, news RSS and GDELT (no keys), plus
+  YouTube, Reddit and Telegram when keys are present, then categorises, links and analyses them, and exports an
+  evidence bundle.
 
 Every output carries its evidence (rules fired, sources, scores, timestamps). Simple, explainable rules
 come first, and each analysis step is a swappable module.
@@ -24,7 +29,11 @@ pip install uv                      # or: python -m pip install --user uv
 uv sync --extra dev                 # core install (TF-IDF fallback, ~1 GB)
 uv run socmint demo                 # offline end-to-end run on synthetic data -> data/demo.db
 uv run socmint dashboard --demo     # browse every view at http://127.0.0.1:8501
+uv run socmint showcase --demo      # rebuild data/demo.db + 3 synthetic investigations -> http://127.0.0.1:8502
 ```
+
+`showcase --demo` is the investor demo: one page with a fictional flood event, a fictional stock-tip channel and a
+group promoted from a coordination finding. Walkthrough: [`docs/DEMO.md`](docs/DEMO.md).
 
 For real multilingual embeddings (cross-lingual claim matching) and voice-note transcription:
 
@@ -63,6 +72,22 @@ uv run socmint dashboard            # analyst dashboard on the main DB
 uv run socmint purge                # apply media retention (run daily, e.g. via cron / Task Scheduler)
 ```
 
+Investigations (live, no keys needed for the default sources):
+```bash
+uv run socmint investigate create --kind event --name "test" --terms "flood,बाढ़" --purpose "demo"
+uv run socmint investigate collect "test"           # Bluesky, Mastodon, news RSS, GDELT; failing sources are reported
+uv run socmint investigate analyze "test"           # narratives, possible coordination, market risk (scoped)
+uv run socmint investigate show "test"              # summary (--json for everything)
+uv run socmint investigate export "test" --format csv   # data/exports/... with a SHA-256 manifest
+uv run socmint investigate create --kind subject --name "Platform accounts" --purpose "why" --handle bluesky:bsky.app --handle mastodon:@Mastodon@mastodon.social
+uv run socmint investigate promote-group 12 --name "Copy network" --purpose "why"
+uv run socmint investigate delete "test" --yes      # links + posts/accounts nobody else references
+uv run socmint showcase                             # the same, in the browser (main DB)
+```
+Investigations can also be written as YAML (`--file`, several documents per file). Fields: `kind`, `name`,
+`purpose` (required), `description`, `terms` (per language), `places`, `handles` (per platform), `channels`
+(Telegram channels / subreddits to search in), `sources`, `window`.
+
 API examples:
 ```bash
 curl -X POST http://127.0.0.1:8000/check -F "text=You won a lottery, pay fee to x@ybl"
@@ -79,6 +104,8 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `socmint bot` / `api` / `dashboard` | Interfaces (all bind to localhost) |
 | `socmint purge` | Delete raw media older than `RETENTION_DAYS` |
 | `socmint demo` | Offline synthetic end-to-end demo |
+| `socmint investigate create\|list\|collect\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
+| `socmint showcase [--demo]` | One-page showcase dashboard on 127.0.0.1:8502 (`--demo` rebuilds data/demo.db offline) |
 | `socmint telegram-login` | One-time Telethon login for reading public channels |
 
 ## Getting the free keys (all optional)
@@ -99,13 +126,20 @@ A source whose key is missing is reported as `missing_key` and skipped. Nothing 
 - `config/sources.yaml`: every source (URL, enabled, rate limit, notes). Verified URLs are listed in `SOURCES.md`.
 - `config/brands.yaml`: monitored brands: official domains, verified support numbers, aliases (en/hi/mr).
 - `config/scam_rules.yaml`: scam categories, multilingual keywords, signal weights, shorteners. Edit without code changes.
-- `config/thresholds.yaml`: every threshold and weight (scam bands, claim-match cut-offs, clustering, CCS, market).
+- `config/thresholds.yaml`: every threshold and weight (scam bands, claim-match cut-offs, clustering, CCS, market,
+  categoriser confidences, investigation windows and limits).
+- `config/categories.yaml`: post categories (misinformation, scam, civic safety, election/political, health, market
+  manipulation, brand impersonation, hate/communal (off), other) with en/hi/mr/Hinglish keywords and signal rules.
 - `config/sebi_registered.csv`: hand-maintained SEBI RA/IA registrations (SEBI publishes no bulk file).
 
 ## Architecture
 ```
 ingest/  Source.fetch(since) -> FetchResult   (one failing source never stops the run)
    |  rss · gdelt · threatfeeds · nse · sebi · factcheck_api · youtube · reddit · telegram_channels · ct_logs
+   |  + search_terms(terms, since, limit) / account_posts(handle, ...) for investigations; bluesky · mastodon
+   v
+investigate/  create -> collect (per-source isolation, collection_runs) -> enrich (lang, entities, categories,
+              indicators) -> scoped analysis -> summary / export / promote-group / delete (all audited)
    v
 SQLite (SQLAlchemy 2.x, Postgres-ready)  items · factchecks · submissions · indicators · narratives · alerts · ...
    ^                                   ^
@@ -114,7 +148,7 @@ tipline/pipeline.check()          analyze/runner (batch, per-module isolation)
   -> redact -> lang -> [claims |     market (mention/volume z) · impersonation (dnstwist) · hate (stub)
   media | scam | brand] -> verdict
    |
-   +-- CLI · FastAPI · Telegram bot          dashboard/ (Streamlit, evidence on every view)
+   +-- CLI · FastAPI · Telegram bot          dashboard/ (Streamlit, evidence on every view) · showcase/ (one page)
 ```
 Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in v0), `HateClassifier`
 (disabled), `Source` subclasses, and all scoring rules in YAML.
@@ -132,18 +166,33 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
   scam artifacts go to `indicators` with no link to the sender (a temporary review link is wiped on review or
   retention; see DECISIONS.md). Raw media is deleted after `RETENTION_DAYS` (default 7). `/delete` erases all
   of a sender's submissions.
-- **Aggregate analysis only**: no profiling of individuals. Accounts appear only as nodes in "possible
-  coordination" groups. Indicators are "reported" or "suspected", never "scammer".
+- **Analyst-directed monitoring of public accounts** (changed from v0's "aggregate analysis only"; see DECISIONS.md).
+  An analyst may now open a *subject* or *group* investigation on named public accounts, under these guardrails:
+  - a subject is created only by an explicit analyst action and needs a **required `purpose`**, stored with it;
+  - only what each platform's **official API returns publicly** is collected: public posts and public profile
+    fields. Never private/protected content, contact lists, followers' identities, DMs or anything behind a login;
+  - **no automatic identity resolution** across platforms: accounts are keyed `platform:platform_id` and are never
+    merged;
+  - platform **opt-outs are respected**: Mastodon accounts with `noindex: true` or `indexable: false` and Bluesky
+    accounts carrying the `!no-unauthenticated` label are skipped (and the skip is logged in the collection run);
+  - every create, collect, view, export and delete of an investigation is written to `audit_log`;
+  - deleting an investigation removes its links, runs and scoped analysis, plus posts and accounts that no other
+    investigation references (posts from the global `socmint ingest` are kept);
+  - demo subjects are **fictional**; no real private person appears in fixtures.
+  Coordination findings stay "possible coordination", never "bots". Indicators are "reported" or "suspected",
+  never "scammer".
 - **Market module**: manipulation-risk alerts with evidence only. Never buy/sell/hold advice, price targets or
   predictions (enforced by a test).
-- **Hate/communal**: interface only, disabled, analyst-only, never shown to citizens.
+- **Hate/communal**: interface only, disabled, analyst-only, never shown to citizens. The `hate_communal` post
+  category is also off by default, analyst-only, and has no shipped keywords.
 - This is a prototype. Its outputs can be wrong and must be reviewed by people before any action.
 
 ## Known limitations
 - Small fact-check corpus: RSS feeds hold about 10 recent items each. History accumulates over scheduled runs, or
   faster with the Google Fact Check API key. BOOM and India Today feeds are unavailable (see SOURCES.md).
-- No live public-channel data until Telegram/Reddit/YouTube keys are added, so coordination and market alerts
-  currently fire only on demo data. News headlines rarely contain tickers.
+- Live public-channel data comes from Bluesky and Mastodon without keys; Telegram/Reddit/YouTube need keys. Market
+  alerts need ticker mentions in collected posts (news headlines rarely contain tickers), so they have fired only on
+  demo data so far.
 - Narrative growth is inflated on a first run (no baseline history yet).
 - Scam rules are keyword-based: novel scripts or heavily misspelt messages can slip through, and regional
   languages beyond en/hi/mr (and Hinglish) are not covered. Hindi/Marathi reply text needs native-speaker review.
@@ -153,7 +202,13 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
 - dnstwist scans are capped at 400 permutations per domain. Registered lookalikes include parked and defensive
   registrations (shown as low severity).
 - "Seen before" is a linear pHash scan (fine up to about 100k images). There is no deepfake detection.
-- Single-user local tool: no auth beyond the API key, SQLite only.
+- Single-user local tool: no auth beyond the API key, SQLite only. The showcase has no login: keep it on localhost.
+- **Bluesky keyword search**: the public AppView's `searchPosts` returns HTTP 403 without auth, so event search
+  falls back to listening to the public Jetstream firehose for up to 60 s and matching terms locally. It only
+  finds posts made *during* that window, so rare terms often return nothing. Account (subject) collection works.
+- **Mastodon events** use hashtag timelines only (full-text search needs an authenticated account), and many
+  accounts are skipped because they opted out of indexing.
+- Telegram, Reddit and YouTube collection needs keys and has been tested only against recorded fixtures.
 
 ## Next steps (v1)
 See the build report / DECISIONS.md. In short: grow the fact-check corpus and calibrate thresholds on reviewed
@@ -163,8 +218,9 @@ with scheduled jobs and analyst auth.
 
 ## Development
 ```bash
-uv run pytest                        # 150+ tests, offline (TF-IDF backend)
+uv run pytest                        # 210+ tests, offline (TF-IDF backend)
 SOCMINT_TEST_BACKEND=e5 uv run pytest tests/test_tipline.py   # same fixtures on e5
 uv run ruff check socmint tests
 ```
-Docs: `DECISIONS.md` (every non-obvious choice), `SOURCES.md` (every source, terms, live status).
+Docs: `DECISIONS.md` (every non-obvious choice), `SOURCES.md` (every source, terms, live status),
+`docs/DEMO.md` (5-minute showcase walkthrough and live mode).

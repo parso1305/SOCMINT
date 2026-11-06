@@ -203,6 +203,9 @@ def test_scoped_coordination_finds_group_and_promotes_it():
     runner.collect(iid, factory=factory)
     out = runner.analyze(iid)
     assert out["modules"]["coordination"]["status"] == "ok"
+    runner.analyze(iid)  # re-running does not duplicate co_posts pairs
+    with session_scope() as s:
+        assert s.scalar(select(func.count(Edge.id)).where(Edge.kind == "co_posts", Edge.investigation_id == iid)) == 28
     groups = report.summary(iid)["coordination_groups"]
     top = groups[0]
     assert top["accounts"] == 8 and top["score"] >= 0.6

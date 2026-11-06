@@ -87,3 +87,42 @@ Choices made without asking (as permitted by the build prompt), with the reasoni
 - `socmint dashboard --demo` browses `data/demo.db`. Streamlit runs headless on 127.0.0.1 (the first-run e-mail prompt otherwise blocks the server).
 - The hate / communal module's status ("not enabled") is shown on the Sources page.
 - Small additive migration in `init_db` (ALTER TABLE ADD COLUMN for new model columns), so existing DBs keep working.
+
+## Investigations: scope change (M9–M13)
+- **Changed rule: "aggregate analysis only, no profiling of individuals" → "analyst-directed monitoring of public accounts".** The investor-prototype brief (`prompts/01_investor_prototype.md`) asks for *subject* investigations of named public accounts. We accept it only with the guardrails the brief sets, and enforce them in code:
+  - a subject exists only after an explicit analyst action (CLI, YAML file or dashboard form) with a **required, non-blank `purpose`** (validated by `InvestigationConfig`);
+  - collection uses only what each platform's official API returns publicly: public posts and public profile fields (handle, display name, bio, counts, creation date). No follower lists, no contacts, no DMs, nothing behind a login;
+  - **no identity resolution**: accounts are keyed `platform:platform_id` and never merged across platforms, not even when handles match;
+  - **opt-outs**: Mastodon `noindex: true` / `indexable: false` and Bluesky `!no-unauthenticated` accounts are skipped with a note in the collection run;
+  - every create, collect, view, export, promote and delete is written to `audit_log`.
+  Why: monitoring named public accounts is the core of the analyst use case (scam promoters, stock-tip channels, coordinated networks). The safeguards keep it to public, opt-in-respecting data, recorded with a reason and auditable.
+- **Account key** = `platform:platform_id`, where platform equals the post's `source_type`. platform_id is the Bluesky DID, the full Mastodon `user@instance`, the YouTube channelId, the Reddit username, or the Telegram numeric channel id. These ids are stable, unlike handles, which change.
+- **Roles never downgrade**: subject > member > top_author. The `top_author` links (the 25 most active authors) make the "People" view useful for events without profiling anyone beyond their posts in scope.
+- **Delete-orphan rule**: deleting an investigation removes its links, runs, scoped coordination groups, narratives and alerts. It removes a post only if no other investigation links it **and** the investigation's collection created it (`meta.collected_for`). Posts from the global `socmint ingest` are never deleted. An account is removed when no other investigation links it and no remaining post was written by it.
+- **Per-investigation scoping** of "search within" lists: an event's `channels.telegram` / `channels.reddit` override the global `sources.yaml` lists for that run only. Real channels and subreddits are added only with approval.
+- **Scoped analysis**: narratives, coordination and market run on the investigation's posts only. Scoped market runs do not write mention counts to shared `market_daily` rows, and their alerts get an `:inv{id}` dedup suffix.
+- **Edges**: forward, reply, mention, shares_url, uses_hashtag from post fields; co_posts between members of a possible-coordination group (added by `analyze`). A **Bluesky quote post is treated as a forward edge** (it re-publishes another account's post with commentary, like a Telegram forward).
+
+## Bluesky & Mastodon (M10)
+- **Bluesky keyword search**: `public.api.bsky.app/.../searchPosts` returns HTTP 403 without auth (checked 2026-11-06). `api.bsky.app` answers the same call unauthenticated, but switching hosts to get past a 403 is working around a block, so we don't do it. Event search instead listens to the official public **Jetstream** firehose for a bounded time (60 s / 20,000 posts), matches terms locally and hydrates matches with `getPosts`. The trade-off is that only posts made during the listen are found. `search_mode: auto` still tries the public `searchPosts` first, so the source uses it again automatically if Bluesky reopens it.
+- **Mastodon events are hashtag-only**: full-text search needs an authenticated account. Each term becomes a tag (`#PuneRains` → `PuneRains`, `Pune flood` → `Puneflood`), and the tag timeline is paginated back to `since`.
+- Account lookups go to the account's **home instance** (the domain in `@user@instance`); a bare `@user` is looked up on the first configured instance. Every host goes through `PoliteClient` (robots.txt, rate limit).
+- Term matching (`TermMatcher`): Latin terms on word boundaries, Devanagari as substrings (Hindi/Marathi inflect by suffix), `#tag` terms against hashtags.
+
+## Collectors & GDELT (M11, M13)
+- **GDELT fail-fast in investigations**: a single OR query per event with `retries=0` (`event_retries` in `sources.yaml`). The first live collect took 7 minutes, 3.5 of them spent on 429 back-off. A throttled GDELT now fails in seconds, and the other sources are unaffected. `PoliteClient.get` gained a per-call `retries` override for this.
+- Reddit keyword search runs **only inside the configured subreddits** (`restrict_sr`); with none configured it returns nothing and says so. Telegram search runs only inside listed **public broadcast channels**; groups and private chats are never read.
+- YouTube comments: `reply_to_author_id` is the video's channel, so comment threads become reply edges to the channel.
+
+## Categoriser (M12)
+- Rules first, always on and offline: keyword labels per category (en/hi/mr/Hinglish) plus signal labels (scam score band, fact-check match, brand impersonation, ticker + promotion language). Each label stores its evidence. `other` only when nothing fires.
+- **hate_communal** ships `enabled: false`, `analyst_only: true`, with no keywords. Turning it on is an explicit config change.
+- **Optional zero-shot** (`categorize.zero_shot: false` by default): `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli`, ~107M parameters, ~430 MB, CPU-friendly and covering Hindi/Marathi via XNLI. It is only added at score ≥ 0.80, and degrades gracefully (reported in `degraded`) when the model or the `[ml]` extra is missing.
+- Analyst overrides win over rule and zero-shot labels and are audited.
+
+## Showcase (M14–M15)
+- **Demo data goes through the real pipeline**: `socmint/scenario.py` provides a `FixtureSource` that stands in for the platform collectors, so `runner.collect → enrich → analyze → promote_group` run unchanged and offline. Synthetic rows are only ever written to `data/demo.db`, and every row has `synthetic=True` (tested).
+- The demo event uses a real city (Pune, as the brief asks) but a **fictional dam ("Demosagar")** for the "dam has burst" rumour, so no synthetic text claims a real dam failed. All accounts, channels, UPI IDs and domains are invented (`.example` domains).
+- One Streamlit page (`socmint/showcase/app.py`) with built-in charts and `st.graphviz_chart`; logic lives in `showcase/data.py` so it can be tested without Streamlit. It runs headless on 127.0.0.1:8502, next to the analyst dashboard on 8501. Views are audited once per investigation selection, not on every rerun.
+- Exports from the dashboard are prepared on a button click (each export is audited), then offered as a zip download.
+- Stock-tip fixture posts avoid buy/sell/hold wording, so a test can check that **no** showcase text contains it, quoted evidence included.

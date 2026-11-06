@@ -411,14 +411,24 @@ def analyze(ref: int | str, modules: tuple[str, ...] = ("narratives", "coordinat
     return out
 
 
-def _co_post_edges(inv_id: int, group_ids: list[int]) -> None:
-    """`co_posts` edges between accounts that posted near-identical text (possible coordination)."""
+def _co_post_edges(inv_id: int, group_ids: list[int], min_score: float | None = None) -> None:
+    """`co_posts` edges between accounts that posted near-identical text, for groups at or above the coordination
+    alert score (lower-scoring groups are usually organic resharing and stay in the group table only).
+    A promoted group always gets its edges (`min_score=0`): the analyst chose it."""
+    if min_score is None:
+        min_score = float(threshold("coordination.alert_score", 0.6))
     with session_scope() as s:
-        for g in s.scalars(select(CoordinationGroup).where(CoordinationGroup.id.in_(group_ids or [-1]))).all():
+        have = set(s.execute(select(Edge.src, Edge.dst).where(Edge.kind == "co_posts",
+                                                              Edge.investigation_id == inv_id)).all())
+        for g in s.scalars(select(CoordinationGroup).where(CoordinationGroup.id.in_(group_ids or [-1]),
+                                                           CoordinationGroup.score >= min_score)).all():
             items = s.scalars(select(Item).where(Item.id.in_(g.item_ids))).all()
             keys = sorted({k for k in (item_account_key(it) for it in items) if k})[:12]
             for i, a in enumerate(keys):
                 for b in keys[i + 1 :]:
+                    if (a, b) in have:  # re-running analysis does not duplicate the pair
+                        continue
+                    have.add((a, b))
                     s.add(Edge(kind="co_posts", src=a, dst=b, item_id=None, investigation_id=inv_id,
                                synthetic=all(it.synthetic for it in items)))
 
@@ -459,7 +469,7 @@ def promote_group(group_id: int, name: str, purpose: str, who: str | None = None
         link_items(s, inv_id, {i: {"coordination_group": group_id} for i in item_ids})
         store_edges(s, item_ids, investigation_id=inv_id)
         audit(s, who or actor(), "investigation_promote", f"group={group_id} -> investigation={inv_id}")
-    _co_post_edges(inv_id, [group_id])
+    _co_post_edges(inv_id, [group_id], min_score=0.0)
     return inv_id
 
 
