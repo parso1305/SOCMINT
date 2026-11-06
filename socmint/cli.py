@@ -192,6 +192,30 @@ def dashboard(demo_db: bool = typer.Option(False, "--demo", help="Browse data/de
 
 
 @app.command()
+def showcase(demo_db: bool = typer.Option(False, "--demo", help="Rebuild data/demo.db with the synthetic showcase "
+                                                                   "investigations and open it (offline)."),
+             port: int = 8502) -> None:
+    """Start the one-page showcase dashboard (localhost): events, people/accounts and groups."""
+    import os
+    import subprocess
+
+    env = dict(os.environ)
+    if demo_db:
+        from socmint.demo import run_showcase_demo
+
+        typer.echo("Rebuilding data/demo.db with synthetic data (offline)…")
+        s = run_showcase_demo()
+        for k, v in s["investigations"].items():
+            typer.echo(f"  {k:<8} #{v['id']}: {v['posts']} posts  sources: {v['runs']}")
+        env.update({"SOCMINT_DB_URL": s["db"], "SOCMINT_OFFLINE": "1"})
+    app_path = Path(__file__).parent / "showcase" / "app.py"
+    typer.echo(f"Showcase: open http://127.0.0.1:{port} in your browser  (Ctrl+C to stop)")
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), "--server.address", "127.0.0.1",
+                    "--server.port", str(port), "--server.headless", "true",
+                    "--browser.gatherUsageStats", "false"], env=env, check=False)
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__

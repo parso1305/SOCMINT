@@ -176,7 +176,9 @@ def run_showcase_demo() -> dict[str, Any]:
     """Rebuild data/demo.db: the v0 demo plus the three showcase investigations."""
     summary = run_demo()
     seeded = seed_investigations()
-    summary["investigations"] = {k: {"id": v["id"], "new_posts": v["collect"]["new_posts"],
+    from socmint.investigate.runner import item_ids_of
+
+    summary["investigations"] = {k: {"id": v["id"], "posts": len(item_ids_of(v["id"])),
                                      "runs": {r["source"]: r["status"] for r in v["collect"]["runs"]}}
                                  for k, v in seeded.items()}
     return summary
