@@ -28,6 +28,7 @@ narratives:
   growth_alert: 2.0          # last-24h count / previous-72h daily average
   min_count_24h: 4
   growth_floor_per_day: 0.5   # denominator floor so brand-new clusters do not divide by zero
+  min_baseline_hours: 72       # investigations: no growth alerts until they have collected this long
   factcheck_link_min_shared_keywords: 2   # TF-IDF mode only; links also need >=20% member votes
   keywords_per_cluster: 8
 

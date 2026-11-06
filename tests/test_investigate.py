@@ -16,6 +16,7 @@ from socmint.core.db import session_scope
 from socmint.core.http import OfflineError
 from socmint.core.models import (
     Account,
+    Alert,
     AuditLog,
     CollectionRun,
     Edge,
@@ -218,3 +219,25 @@ def test_scoped_coordination_finds_group_and_promotes_it():
         assert len(links) == 8 and {(r.role, r.added_by) for r in links} == {("member", "coordination")}
         assert s.scalar(select(func.count(Edge.id)).where(Edge.kind == "co_posts", Edge.investigation_id == gid)) == 28
     assert report.summary(gid)["counts"]["posts"] == 8
+
+
+def test_no_narrative_growth_alerts_without_a_collection_baseline():
+    """P9 (D1): a first collection has no baseline, so growth ratios are inflated; narratives yes, alerts no."""
+    class Busy(FakeSocial):  # two clear stories, all posted in the last few hours
+        def search_terms(self, terms_by_lang, since, limit):
+            items = [post(f"r{i}", COORD + f" ({i})", f"r{i}", minutes_ago=10 + i * 7) for i in range(12)]
+            items += [post(f"h{i}", f"NDRF rescue boats deployed in Sinhagad road area, helpline 1077 update {i}",
+                           f"h{i}", minutes_ago=15 + i * 9) for i in range(12)]
+            return FetchResult(items=items)
+
+    iid = runner.create(event_cfg(sources=["bluesky"]))
+    runner.collect(iid, factory=lambda logical, cfg: Busy({**cfg, "name": "fake_busy"}))
+    res = runner.analyze(iid, modules=("narratives",))["modules"]["narratives"]["result"]
+    assert res["clusters"] >= 1 and res["alerts"] == 0
+    assert "growth alerts held back" in res["note"]
+    with session_scope() as s:
+        assert s.scalar(select(func.count(Alert.id)).where(Alert.module == "narratives")) == 0
+        for run in s.scalars(select(CollectionRun).where(CollectionRun.investigation_id == iid)).all():
+            run.started_at -= timedelta(hours=80)  # pretend it has been collecting for more than 72 h
+    res = runner.analyze(iid, modules=("narratives",))["modules"]["narratives"]["result"]
+    assert res["alerts"] >= 1 and "note" not in res

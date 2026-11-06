@@ -84,8 +84,12 @@ def _link_factchecks(texts: list[str], keywords: list[str], fc_texts: dict[int, 
 
 
 def run(window_days: int | None = None, item_ids: list[int] | None = None,
-        investigation_id: int | None = None) -> dict[str, Any]:
-    """Cluster recent posts. With `item_ids`, only those posts (any age) are clustered (investigation scope)."""
+        investigation_id: int | None = None, growth_alerts: bool = True) -> dict[str, Any]:
+    """Cluster recent posts. With `item_ids`, only those posts (any age) are clustered (investigation scope).
+
+    `growth_alerts=False` still stores the narratives (with their growth) but raises no growth alerts: used for
+    investigations without enough collected history for a baseline.
+    """
     window_days = window_days or int(threshold("narratives.window_days", 14))
     now = utcnow()
     since = now - timedelta(days=window_days)
@@ -147,7 +151,7 @@ def run(window_days: int | None = None, item_ids: list[int] | None = None,
             s.add(n)
             s.flush()
             summary["narrative_ids"].append(n.id)
-            if growth >= growth_alert and c24 >= min24:
+            if growth_alerts and growth >= growth_alert and c24 >= min24:
                 debunked = bool(linked)
                 synthetic = all(rows[i].synthetic for i in idx)
                 title = (f"Debunked narrative resurfacing fast: {', '.join(kw.get(c, [])[:4])}" if debunked

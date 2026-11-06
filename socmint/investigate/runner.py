@@ -393,10 +393,17 @@ def analyze(ref: int | str, modules: tuple[str, ...] = ("narratives", "coordinat
     ids = item_ids_of(inv.id)
     fns = {"narratives": narratives.run, "coordination": coordination.run, "market": market.run}
     out: dict[str, Any] = {"investigation_id": inv.id, "posts": len(ids), "modules": {}}
+    history_h, need_h = collected_hours(inv.id), float(threshold("narratives.min_baseline_hours", 72))
     for m in modules:
         t0 = time.monotonic()
         try:
-            res = fns[m](item_ids=ids, investigation_id=inv.id)
+            kw = {"growth_alerts": history_h >= need_h} if m == "narratives" else {}
+            res = fns[m](item_ids=ids, investigation_id=inv.id, **kw)
+            if kw and not kw["growth_alerts"]:
+                res["note"] = (f"growth alerts held back: {history_h:.0f} h of collected history, a baseline needs "
+                               f"{need_h:.0f} h (narratives.min_baseline_hours)")
+                log.info("narrative_growth_alerts_held_back", extra={"investigation_id": inv.id,
+                                                                     "history_hours": round(history_h, 1)})
             out["modules"][m] = {"status": "ok", "result": res, "seconds": round(time.monotonic() - t0, 1)}
         except Exception as e:  # noqa: BLE001  (module isolation)
             out["modules"][m] = {"status": "error", "error": f"{type(e).__name__}: {e}"[:500]}
@@ -410,6 +417,13 @@ def analyze(ref: int | str, modules: tuple[str, ...] = ("narratives", "coordinat
                                           for m, v in out["modules"].items()}}
         audit(s, who or actor(), "investigation_analyze", f"id={inv.id} modules={','.join(modules)}")
     return out
+
+
+def collected_hours(inv_id: int) -> float:
+    """How long this investigation has been collecting: hours since its first collection run."""
+    with session_scope() as s:
+        first = s.scalar(select(func.min(CollectionRun.started_at)).where(CollectionRun.investigation_id == inv_id))
+    return (utcnow() - first).total_seconds() / 3600 if first else 0.0
 
 
 def _co_post_edges(inv_id: int, group_ids: list[int], min_score: float | None = None) -> None:
