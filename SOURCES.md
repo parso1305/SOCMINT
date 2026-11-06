@@ -49,6 +49,8 @@ Loksatta / Lokmat (the feed URLs tried redirect to HTML pages).
 **Investigations (2026-11-06):** an event makes a single OR query of its terms with `startdatetime` (at most 89 days
 back) and **no retries** (`event_retries: 0`), so a 429 fails that source in seconds instead of minutes. On
 2026-11-06 GDELT still answered HTTP 429 to this IP; the source failed cleanly and the other sources completed.
+Re-checked during verification the same day (three event collections): HTTP 429 twice and one "server disconnected";
+each time the source failed cleanly in seconds.
 
 `https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json` with four India keyword queries
 (see sources.yaml). Stores article title, URL, domain and language only. GDELT asks for **≤1 request
@@ -76,6 +78,8 @@ Official AT Protocol AppView and Jetstream endpoints only; no login, no app pass
   hosts to get past the 403 on the public endpoint would be working around a block. Using it needs an explicit decision
   (or an authenticated app password for a project account).
 - Opt-out: accounts labelled `!no-unauthenticated` are not collected (profile check and per post).
+- Re-verified 2026-11-06 (docs/VERIFICATION.md): `searchPosts` still HTTP 403, so the event used the 60 s Jetstream
+  listen (0–2 matches for the test terms); subject collection of `bsky.app` returned 51 posts and the profile in ~4 s.
 - Limitation: the Jetstream fallback only sees posts made while it listens, so it rarely finds rare terms. On
   2026-11-06 a 60 s listen scanned 2,140 posts and none matched "flood / बाढ़".
 
@@ -94,6 +98,8 @@ Instance REST API, unauthenticated, read-only. Instances are listed in `sources.
 - Opt-out: accounts with `noindex: true` or `indexable: false` are skipped. Many remote accounts set this: in the
   2026-11-06 live test 63 tag-timeline posts were skipped for that reason and 37 were stored.
 - The instance's own terms apply; robots.txt is honoured.
+- Re-verified 2026-11-06 (docs/VERIFICATION.md): `#flood`/`#India` tag timelines gave 61–62 posts for an event;
+  `@Mastodon@mastodon.social` gave its profile and 3 posts.
 
 ## Threat feeds
 | Name | Access | Status | Terms |

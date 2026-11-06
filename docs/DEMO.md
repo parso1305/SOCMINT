@@ -25,21 +25,24 @@ The yellow **DEMO DATA (synthetic)** banner is shown on every investigation.
 
 **1. Event: "Pune floods 2026 (demo)"** (selected by default)
 - *Header*: about 290 posts from six sources (Bluesky, Mastodon, Telegram, Reddit, YouTube, news). The chips show each
-  source's last collection status.
-- *Overview*: the posts-over-time chart peaks about 2½ days ago, when the rain was heaviest. **Key findings** lists, in
-  order: the possible-coordination group, the fact-check match, the scam indicators, the fastest-growing narrative and
-  the most common category. Category and language charts show en / hi / mr / Hinglish.
+  source's last collection status (`Bluesky (demo) · 77 new`).
+- *Overview*: the posts-per-6-hours chart peaks about 2½ days ago, when the rain was heaviest. **Key findings** lists,
+  in order: the possible-coordination group, the fact-check match, the scam indicators, the fastest-growing narrative
+  ("burst, demosagar, dam, flood") and the most common category. Categories ignore the event's own search terms, so
+  "civic safety" counts only posts that mention rescue, helplines, relief camps, heavy rain and so on. Language chart:
+  en / hi / mr / Hinglish.
 - *Posts*: filter Category = `scam`. These are the fake relief appeals using UPI `punerelief.help@okdemo` and the
   lookalike domain `demobank-relief.example`. Pick one under **Post detail** to show its labels with evidence, *why it
   is in this investigation* (matched terms and places), and the extracted entities.
   Then filter Category = `misinformation` for the old-video "Demosagar dam has burst" rumour, which matches a
-  synthetic fact-check.
+  synthetic fact-check. Each label shows its evidence; search terms that were not counted are listed as such.
 - *People & accounts*: the most active authors, with public profile fields only.
 - *Network*: red lines join the **8 accounts that posted near-identical text within 6 minutes** across three
   platforms. The table below lists the possible-coordination groups; the top one scores about 0.93.
   **Promote to Group** turns a group into its own investigation (the demo has already done this once; see 3).
 - *Evidence & export*: suspected indicators, fact-check matches, narratives, the collection log, and **Prepare JSON /
-  CSV export**. The download is a zip of posts, accounts, edges, indicators, the summary and the config, with a
+  CSV export**. There is no narrative growth *alert*: investigations raise those only after 72 h of collecting (a
+  first collection has no baseline), and the demo event is collected in one go. The download is a zip of posts, accounts, edges, indicators, the summary and the config, with a
   SHA-256 `manifest.json`.
 
 **2. Subject: "Demo: stock-tip channel"** (pick it in the sidebar)

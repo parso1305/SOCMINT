@@ -29,11 +29,12 @@ pip install uv                      # or: python -m pip install --user uv
 uv sync --extra dev                 # core install (TF-IDF fallback, ~1 GB)
 uv run socmint demo                 # offline end-to-end run on synthetic data -> data/demo.db
 uv run socmint dashboard --demo     # browse every view at http://127.0.0.1:8501
-uv run socmint showcase --demo      # rebuild data/demo.db + 3 synthetic investigations -> http://127.0.0.1:8502
+uv run socmint showcase --demo      # data/demo.db + 3 synthetic investigations -> http://127.0.0.1:8502
 ```
 
 `showcase --demo` is the investor demo: one page with a fictional flood event, a fictional stock-tip channel and a
-group promoted from a coordination finding. Walkthrough: [`docs/DEMO.md`](docs/DEMO.md).
+group promoted from a coordination finding. The first run builds `data/demo.db` (about a minute with the e5 model);
+later runs reuse it and start in seconds (`--rebuild` builds it again). Walkthrough: [`docs/DEMO.md`](docs/DEMO.md).
 
 For real multilingual embeddings (cross-lingual claim matching) and voice-note transcription:
 
@@ -105,7 +106,7 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `socmint purge` | Delete raw media older than `RETENTION_DAYS` |
 | `socmint demo` | Offline synthetic end-to-end demo |
 | `socmint investigate create\|list\|collect\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
-| `socmint showcase [--demo]` | One-page showcase dashboard on 127.0.0.1:8502 (`--demo` rebuilds data/demo.db offline) |
+| `socmint showcase [--demo] [--rebuild]` | One-page showcase dashboard on 127.0.0.1:8502 (`--demo` opens data/demo.db, building it offline if needed; `--rebuild` forces a build) |
 | `socmint telegram-login` | One-time Telethon login for reading public channels |
 
 ## Getting the free keys (all optional)
@@ -193,7 +194,11 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
 - Live public-channel data comes from Bluesky and Mastodon without keys; Telegram/Reddit/YouTube need keys. Market
   alerts need ticker mentions in collected posts (news headlines rarely contain tickers), so they have fired only on
   demo data so far.
-- Narrative growth is inflated on a first run (no baseline history yet).
+- Narrative growth is inflated on a first run (no baseline history yet). Investigations therefore raise no narrative
+  growth alerts until they have collected for `narratives.min_baseline_hours` (72 h); the narratives are still shown.
+- Investigation categories ignore the investigation's own search terms (a flood event's posts are not "civic safety"
+  just for saying "flood"; see DECISIONS.md). Devanagari keywords match as substrings so stems catch inflections; a
+  short stem can still match inside an unrelated word (for example `पूर`, flood, inside `पूर्ण`, complete).
 - Scam rules are keyword-based: novel scripts or heavily misspelt messages can slip through, and regional
   languages beyond en/hi/mr (and Hinglish) are not covered. Hindi/Marathi reply text needs native-speaker review.
 - e5 claim matching uses a shipped background-mean vector computed from real headlines. Thresholds are calibrated
@@ -218,9 +223,10 @@ with scheduled jobs and analyst auth.
 
 ## Development
 ```bash
-uv run pytest                        # 210+ tests, offline (TF-IDF backend)
+uv run pytest                        # 230+ tests, offline (TF-IDF backend)
 SOCMINT_TEST_BACKEND=e5 uv run pytest tests/test_tipline.py   # same fixtures on e5
 uv run ruff check socmint tests
 ```
 Docs: `DECISIONS.md` (every non-obvious choice), `SOURCES.md` (every source, terms, live status),
-`docs/DEMO.md` (5-minute showcase walkthrough and live mode).
+`docs/DEMO.md` (5-minute showcase walkthrough and live mode). `docs/VERIFICATION.md` records the end-to-end checks
+of the real app (before and after fixes).
