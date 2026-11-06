@@ -12,7 +12,7 @@ import feedparser
 from socmint.core.http import HttpError, OfflineError
 from socmint.core.logging import get_logger
 from socmint.core.schemas import FactCheckIn, FetchResult, ItemIn
-from socmint.ingest.base import Source, clean_summary, register
+from socmint.ingest.base import Source, TermMatcher, clean_summary, register
 
 log = get_logger(__name__)
 _IMG_RE = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
@@ -51,6 +51,21 @@ class RSSSource(Source):
     """cfg: url, publisher, lang, kind (factcheck|news), hash_images (bool), max_images (int)."""
 
     type_name = "rss"
+    capabilities = {"terms"}
+
+    def search_terms(self, terms_by_lang: dict[str, list[str]], since: datetime | None, limit: int) -> FetchResult:
+        """Keyword filter over the feed (feeds hold ~10-50 recent entries, so this only sees recent news)."""
+        matcher = TermMatcher(terms_by_lang)
+        res = self.fetch(since)
+        out = FetchResult()
+        for it in res.items:
+            hits = matcher.match(it.text)
+            if hits and (since is None or it.published_at is None or it.published_at >= since):
+                it.meta["matched_terms"] = hits
+                out.items.append(it)
+        out.factchecks = [f for f in res.factchecks if matcher.match(f"{f.title} {f.claim_text or ''}")]
+        out.items = out.items[:limit]
+        return out
 
     def fetch(self, since: datetime | None) -> FetchResult:
         body = self.client.get(self.cfg["url"], cache_ttl=self.cfg.get("cache_ttl_s", 900))
@@ -88,7 +103,7 @@ class RSSSource(Source):
                     ItemIn(
                         source=self.name, source_type="news", external_id=e.get("id") or link, url=link,
                         channel=publisher, published_at=published, lang=lang,
-                        text=f"{title}. {summary}".strip(". "), meta={"publisher": publisher},
+                        text=f"{title}. {summary}".strip(". "), meta={"publisher": publisher}, urls=[link],
                     )
                 )
         return res

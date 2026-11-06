@@ -26,15 +26,27 @@ class GoogleFactCheckSource(Source):
 
     type_name = "google_factcheck"
     required_settings = ("google_factcheck_api_key",)
+    capabilities = {"terms"}
 
     def hosts(self) -> list[str]:
         return [API]
 
     def fetch(self, since: datetime | None) -> FetchResult:
+        return self._claims(self.cfg.get("queries", []), self.cfg.get("languages", ["en"]))
+
+    def search_terms(self, terms_by_lang: dict[str, list[str]], since: datetime | None, limit: int) -> FetchResult:
+        """Event terms -> fact-checks (stored as FactCheck; posts are linked to them by claim matching)."""
+        res = FetchResult()
+        for lang, terms in terms_by_lang.items():
+            langs = [lang] if lang in ("en", "hi", "mr") else self.cfg.get("languages", ["en"])
+            res.extend(self._claims([t.lstrip("#") for t in terms], langs))
+        return res
+
+    def _claims(self, queries: list[str], languages: list[str]) -> FetchResult:
         key = get_settings().google_factcheck_api_key
         res = FetchResult()
-        for lang in self.cfg.get("languages", ["en"]):
-            for q in self.cfg.get("queries", []):
+        for lang in languages:
+            for q in queries:
                 params = {"query": q, "languageCode": lang, "pageSize": int(self.cfg.get("page_size", 50)),
                           "maxAgeDays": int(self.cfg.get("max_age_days", 30)), "key": key}
                 data = self.client.get_json(API, params=params, cache_ttl=21600, check_robots=False)
