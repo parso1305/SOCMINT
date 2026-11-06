@@ -1,0 +1,122 @@
+# Post categories (multi-label: one post can carry several). Edit freely; no code changes needed.
+#
+# Rules run first and always (offline). A category fires from its own keywords and/or from signals the system
+# already computes (scam score band, fact-check match, brand impersonation, market promo language).
+# Matching uses normalised text (see scam_rules.yaml): Latin keywords on word boundaries, Devanagari as substrings.
+# Every label stores the evidence that produced it. Confidences and the optional zero-shot model are configured
+# under `categorize:` in thresholds.yaml. `other` is assigned only when nothing else fires.
+
+categories:
+  misinformation:
+    label: "Misinformation"
+    enabled: true
+    zero_shot_label: "a false rumour or misleading claim"
+    # the category fires on its sublabel keywords or the fact-check signal (no general keywords)
+    sublabels:
+      old_or_out_of_context_media:
+        keywords:
+          en: [old video, old photo, old image, from 2019, from 2018, from last year, not from today, unrelated video,
+               different incident, out of context, recycled video, viral old video]
+          hi: [पुराना वीडियो, पुरानी वीडियो, पुरानी फोटो, पुरानी तस्वीर, पुराना है, दूसरी घटना]
+          mr: [जुना व्हिडिओ, जुना फोटो, जुने छायाचित्र, जुनी घटना, वेगळ्या घटनेचा]
+          hinglish: [purana video, purani video, purani photo]
+      fabricated_claim:
+        keywords:
+          en: [dam has burst, dam burst, dam has cracked, fake news, rumour, rumor, hoax, forwarded as received,
+               share before deleted, share before this is deleted, media is hiding, government is hiding, unverified claim]
+          hi: [अफवाह, अफ़वाह, फर्जी खबर, झूठी खबर, डैम टूट, बांध टूट, बांध फट, डिलीट होने से पहले शेयर]
+          mr: [अफवा, खोटी बातमी, धरण फुटले, धरण फुटलं, धरण फुटणार]
+          hinglish: [dam toot gaya, bandh toot gaya, afwah, jhoothi khabar]
+      manipulated_media:
+        keywords:
+          en: [edited photo, morphed, photoshopped, doctored, deepfake, deep fake, ai generated, ai-generated, fake video]
+          hi: [एडिटेड, मॉर्फ्ड, फर्जी वीडियो, नकली वीडियो]
+          mr: [एडिट केलेला, बनावट व्हिडिओ]
+          hinglish: [edited hai, fake video hai, nakli video]
+      factcheck_matched: {}   # signal only: the post matches a stored fact-check (claim matching)
+
+  scam:
+    label: "Scam / fraud"
+    enabled: true
+    zero_shot_label: "a scam or fraud asking for money or personal details"
+    # signal only: the existing rule-based scam score (config/scam_rules.yaml). Sublabels = its 9 categories.
+    sublabels_from: scam_rules
+
+  civic_safety:
+    label: "Civic safety"
+    enabled: true
+    zero_shot_label: "a disaster, accident, public safety or law and order update"
+    sublabels:
+      disaster:
+        keywords:
+          en: [flood, floods, flooding, flooded, waterlogging, waterlogged, heavy rain, heavy rainfall, cloudburst, landslide,
+               cyclone, earthquake, dam, discharge, evacuate, evacuation, relief camp, rescue, ndrf, sdrf, imd alert,
+               red alert, orange alert, helpline, road closed, roads closed, school holiday, schools closed]
+          hi: [बाढ़, बाढ, बारिश, भारी बारिश, बादल फटा, भूस्खलन, बांध, डैम, राहत शिविर, बचाव, एनडीआरएफ, अलर्ट, हेल्पलाइन, सड़क बंद]
+          mr: [पूर, पाऊस, मुसळधार, अतिवृष्टी, ढगफुटी, दरड, धरण, विसर्ग, स्थलांतर, मदत छावणी, बचाव, एनडीआरएफ, अलर्ट,
+               हेल्पलाइन, रस्ता बंद, शाळांना सुट्टी]
+          hinglish: [baarish, barish, paani bhar gaya, baadh, sadak band]
+      accident:
+        keywords:
+          en: [accident, collision, crash, bridge collapse, building collapse, fire broke out, injured, killed, drowned, swept away]
+          hi: [दुर्घटना, हादसा, पुल गिरा, इमारत गिरी, आग लगी, घायल, डूब, बह गए]
+          mr: [अपघात, पूल कोसळला, इमारत कोसळली, आग लागली, जखमी, बुडाला, वाहून गेला]
+          hinglish: [hadsa, accident ho gaya]
+      law_and_order:
+        keywords:
+          en: [police, curfew, section 144, prohibitory orders, arrested, fir, riot, violence, stone pelting, looting, traffic advisory]
+          hi: [पुलिस, कर्फ्यू, धारा 144, गिरफ्तार, दंगा, हिंसा, पथराव, लूट]
+          mr: [पोलीस, संचारबंदी, जमावबंदी, अटक, दंगल, हिंसाचार, दगडफेक]
+          hinglish: [police aayi, curfew laga]
+      protest:
+        keywords:
+          en: [protest, protests, rally, dharna, bandh, agitation, march, sit-in, strike, hunger strike]
+          hi: [प्रदर्शन, धरना, आंदोलन, बंद का आह्वान, रैली, हड़ताल]
+          mr: [आंदोलन, मोर्चा, धरणे आंदोलन, बंद, संप, उपोषण]
+          hinglish: [dharna, andolan, hadtaal]
+
+  election_political:
+    label: "Election / political"
+    enabled: true
+    zero_shot_label: "elections, voting or party politics"
+    keywords:
+      en: [election, elections, vote, voting, voter, evm, polling booth, candidate, ballot, election commission, mla, mp,
+           corporator, manifesto, campaign rally, political party]
+      hi: [चुनाव, मतदान, वोट, मतदाता, ईवीएम, उम्मीदवार, विधायक, सांसद, चुनाव आयोग, घोषणापत्र]
+      mr: [निवडणूक, मतदान, मत, मतदार, ईव्हीएम, उमेदवार, आमदार, खासदार, नगरसेवक, जाहीरनामा]
+      hinglish: [chunav, vote do, voting kal]
+
+  health:
+    label: "Health"
+    enabled: true
+    zero_shot_label: "health, disease or medical advice"
+    keywords:
+      en: [hospital, dengue, malaria, cholera, leptospirosis, diarrhoea, diarrhea, outbreak, epidemic, vaccine, vaccination,
+           disease, infection, doctor, medicine, cure, boil water, contaminated water, drinking water]
+      hi: [अस्पताल, डेंगू, मलेरिया, हैजा, बीमारी, संक्रमण, टीका, टीकाकरण, डॉक्टर, दवा, इलाज, दूषित पानी, पानी उबाल]
+      mr: [रुग्णालय, दवाखाना, डेंग्यू, मलेरिया, कॉलरा, आजार, संसर्ग, लस, लसीकरण, डॉक्टर, औषध, उपचार, दूषित पाणी, पाणी उकळून]
+      hinglish: [bimari, dawai, ilaaj, doctor ko dikhao]
+
+  market_manipulation:
+    label: "Market manipulation"
+    enabled: true
+    zero_shot_label: "stock tips or share price promotion"
+    # signal only: a stock ticker together with investment-promotion language (same rules as the market module)
+
+  brand_impersonation:
+    label: "Brand impersonation"
+    enabled: true
+    zero_shot_label: "someone pretending to be a bank, company or government body"
+    # signal only: a brand mentioned with non-official contact details, or a lookalike domain
+
+  hate_communal:
+    label: "Hate / communal (analyst-only)"
+    enabled: false        # OFF by default. Analyst-only; never shown to citizens or on the investor showcase.
+    analyst_only: true
+    zero_shot_label: "hateful or communal content targeting a community"
+    keywords: {}          # deliberately empty in the repository: an analyst-curated list is a deployment decision
+
+  other:
+    label: "Other"
+    enabled: true
+    fallback: true

@@ -78,3 +78,23 @@ ingest:
 
 hate:
   enabled: false   # interface only in v0; analyst-only, never shown to citizens
+
+categorize:            # post categories (config/categories.yaml)
+  keyword_base: 0.55       # confidence of a keyword label with one hit
+  keyword_step: 0.10       # + per extra keyword hit
+  keyword_cap: 0.85
+  scam_likely: 0.90        # scam label confidence by scam-score band (scam.likely / scam.suspicious)
+  scam_suspicious: 0.65
+  factcheck_match: 0.90    # misinformation/factcheck_matched when claim matching finds a fact-check
+  impersonation: 0.85      # brand_impersonation from non-official contact details / lookalike domain
+  market_promo: 0.75       # market_manipulation: ticker + investment-promotion language
+  min_confidence: 0.5      # labels below this are not stored
+  zero_shot: false         # needs the [ml] extra; degrades gracefully (reported in `degraded`) when unavailable
+  zero_shot_model: MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli   # ~107M params, ~430 MB, CPU-friendly
+  zero_shot_min_score: 0.80
+  zero_shot_hypothesis: "This text is about {}."
+
+investigate:
+  default_window_days: 7     # first collection of an event with no window start / a subject or group
+  per_source_limit: 200      # max posts per source per collection
+  top_authors: 25            # authors linked as `top_author` per investigation
