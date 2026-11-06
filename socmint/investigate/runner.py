@@ -147,15 +147,17 @@ def _window_ok(when: datetime | None, cfg: InvestigationConfig) -> bool:
 # ------------------------------------------------------------------------------------------- collect
 def collect(ref: int | str, only_source: str | None = None, factory: SourceFactory | None = None,
             progress: Callable[[str, dict[str, Any]], None] | None = None, enrich_after: bool = True,
-            who: str | None = None) -> dict[str, Any]:
+            who: str | None = None, resolver: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
     """Collect for one investigation: every configured source in isolation (one failure never stops the rest).
 
     Writes collection_runs + audit_log rows, links posts (with `matched_by`) and accounts, derives edges,
     then enriches the new posts. `progress(source, run_dict)` is called after each source (dashboard status).
+    `factory` / `resolver` replace real sources (the offline demo and tests use them).
     """
     inv = get(ref)
     cfg = config_of(inv)
     factory = factory or default_factory
+    resolve = resolver or resolve_sources
     since = _since(inv, cfg)
     limit = int(threshold("investigate.per_source_limit", 200))
     sources = [only_source] if only_source else cfg.sources
@@ -172,7 +174,7 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
         if logical not in LOGICAL_SOURCES:
             report(logical, _finish_run(inv, logical, "unsupported", detail=f"unknown source {logical!r}"))
             continue
-        cfgs = resolve_sources(logical)
+        cfgs = resolve(logical)
         if not cfgs:
             report(logical, _finish_run(inv, logical, "unsupported",
                                         detail="no enabled source of this kind in config/sources.yaml"))

@@ -123,3 +123,60 @@ def run_demo() -> dict[str, Any]:
             "modules": {k: v["status"] for k, v in modules.items()},
         }
     return summary
+
+
+def seed_investigations(now=None) -> dict[str, Any]:
+    """Create and collect the three synthetic showcase investigations (see socmint/scenario.py).
+
+    Runs the real investigation pipeline (collect -> enrich -> scoped analysis -> promote) with fixture sources,
+    so it works offline. Expects the demo DB to be initialised (`run_demo()` or `use_demo_env()` + `init_db()`).
+    """
+    from socmint import scenario
+    from socmint.analyze import claim_match
+    from socmint.core.db import session_scope
+    from socmint.ingest.store import store_factchecks
+    from socmint.investigate import report, runner
+    from socmint.investigate.config import InvestigationConfig
+
+    who = "demo"
+    with session_scope() as s:
+        store_factchecks(s, scenario.factchecks(now))
+    claim_match.reset_index()
+    factory, resolver = scenario.fixture_factory(now)
+    out: dict[str, Any] = {}
+
+    ev = runner.create(InvestigationConfig(
+        kind="event", name=scenario.EVENT_NAME, synthetic=True, terms=scenario.EVENT_TERMS,
+        places=scenario.AREAS, sources=scenario.EVENT_SOURCES, languages=["en", "hi", "mr"],
+        channels={"telegram": ["pune_rain_updates_demo"], "reddit": ["pune_demo"]},
+        description="Fictional flood event in Pune (synthetic demo data).",
+        purpose="Public-safety monitoring: rumours, fake relief appeals and coordinated posting during floods (demo)."),
+        who)
+    out["event"] = {"id": ev, "collect": runner.collect(ev, factory=factory, resolver=resolver, who=who)}
+    out["event"]["analyze"] = runner.analyze(ev, who=who)
+
+    subj = runner.create(InvestigationConfig(
+        kind="subject", name=scenario.SUBJECT_NAME, synthetic=True,
+        handles={"telegram": [scenario.TIP_CHANNEL], "youtube": [scenario.TIP_YT]},
+        description="Fictional public stock-tip channel and its linked YouTube channel (synthetic demo data).",
+        purpose="Possible pump-and-dump promotion of a small-cap stock (market-integrity review, demo)."), who)
+    out["subject"] = {"id": subj, "collect": runner.collect(subj, factory=factory, resolver=resolver, who=who)}
+    out["subject"]["analyze"] = runner.analyze(subj, modules=("coordination", "market"), who=who)
+
+    groups = report.summary(ev)["coordination_groups"]
+    if groups:
+        gid = runner.promote_group(groups[0]["id"], scenario.GROUP_NAME,
+                                   "Accounts that posted the same dam-failure alert within minutes (demo).", who)
+        out["group"] = {"id": gid, "collect": runner.collect(gid, factory=factory, resolver=resolver, who=who)}
+        out["group"]["analyze"] = runner.analyze(gid, modules=("coordination",), who=who)
+    return out
+
+
+def run_showcase_demo() -> dict[str, Any]:
+    """Rebuild data/demo.db: the v0 demo plus the three showcase investigations."""
+    summary = run_demo()
+    seeded = seed_investigations()
+    summary["investigations"] = {k: {"id": v["id"], "new_posts": v["collect"]["new_posts"],
+                                     "runs": {r["source"]: r["status"] for r in v["collect"]["runs"]}}
+                                 for k, v in seeded.items()}
+    return summary
