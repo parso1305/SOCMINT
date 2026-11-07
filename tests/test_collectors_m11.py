@@ -32,6 +32,9 @@ class Fake:
     def set_rate_limit(self, host, seconds):
         pass
 
+    def forget(self, url, params=None, **kw):
+        pass
+
     def get(self, url, params=None, **kw):
         self.calls.append((url, params or {}))
         out = self.route(url, params or {})
@@ -77,11 +80,16 @@ def test_gdelt_event_query_and_start_datetime():
     assert res.items[0].meta["matched_terms"] == ["Pune flood"] and res.items[0].urls == ["https://n.example/a"]
 
 
-def test_gdelt_plaintext_throttle_fails_cleanly():
+def test_gdelt_plaintext_answers_fail_cleanly():
+    from socmint.core.http import Throttled
     from socmint.ingest.gdelt import GdeltSource
 
-    src = GdeltSource({"name": "g", "type": "gdelt"}, client=Fake(lambda u, p: b"Please limit requests"))
+    # a plain-text query error is an error; a plain-text "limit requests" answer is a throttle (M17.2 cooldown)
+    src = GdeltSource({"name": "g", "type": "gdelt"}, client=Fake(lambda u, p: b"The specified phrase is too short."))
     with pytest.raises(RuntimeError, match="no JSON"):
+        src.search_terms({"en": ["Pune flood"]}, None, 10)
+    src = GdeltSource({"name": "g", "type": "gdelt"}, client=Fake(lambda u, p: b"Please limit requests"))
+    with pytest.raises(Throttled, match="next try after"):
         src.search_terms({"en": ["Pune flood"]}, None, 10)
 
 

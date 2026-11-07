@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 
 from socmint.core.db import audit, session_scope
-from socmint.core.http import HttpError, OfflineError, RobotsDisallowed
+from socmint.core.http import HttpError, OfflineError, RobotsDisallowed, Throttled
 from socmint.core.logging import get_logger
 from socmint.core.models import (
     Account,
@@ -138,6 +138,17 @@ def _since(inv: Investigation, cfg: InvestigationConfig) -> datetime:
     return utcnow() - timedelta(days=days)
 
 
+def _origin(inv: Investigation, cfg: InvestigationConfig) -> datetime:
+    """Start of the investigation's collection window: its configured start, else creation minus the default
+    window. Unlike `_since` it does not move between collections."""
+    if cfg.window.start:
+        st = cfg.window.start
+        return st if isinstance(st, datetime) else datetime(st.year, st.month, st.day)
+    days = int(threshold("investigate.default_window_days", 7)) if cfg.kind == "event" \
+        else int(threshold("investigate.subject_window_days", 30))
+    return (inv.created_at or utcnow()) - timedelta(days=days)
+
+
 def _window_ok(when: datetime | None, cfg: InvestigationConfig) -> bool:
     end = cfg.window.end
     if not end or when is None:
@@ -250,6 +261,8 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
         scfg["channels"] = cfg.channels.get("telegram") or cfg.handles.get("telegram")
     if logical == "reddit" and cfg.channels.get("reddit"):
         scfg["subreddits"] = cfg.channels["reddit"]
+    if logical == "gdelt":  # a stable query start keeps GDELT's HTTP cache key the same between collections
+        scfg["window_start"] = _origin(inv, cfg).isoformat()
 
     def fail(status: str, detail: str) -> _Fetched:
         out.status, out.detail = status, detail
@@ -312,7 +325,14 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
         return fail("blocked_by_robots", str(e))
     except OfflineError as e:
         return fail("offline", str(e))
-    except (HttpError, Exception) as e:  # noqa: BLE001  (per-source isolation is the whole point)
+    except Throttled as e:
+        return fail("throttled", str(e))
+    except HttpError as e:
+        if e.status == 429:
+            return fail("throttled", f"{name} is limiting this IP (HTTP 429); try again later")
+        log.warning("investigation_source_failed", extra={"source": name, "error": str(e)[:300]})
+        return fail("error", f"{type(e).__name__}: {e}"[:1000])
+    except Exception as e:  # noqa: BLE001  (per-source isolation is the whole point)
         log.warning("investigation_source_failed", extra={"source": name, "error": str(e)[:300]})
         return fail("error", f"{type(e).__name__}: {e}"[:1000])
 

@@ -40,6 +40,14 @@ class HttpError(RuntimeError):
         self.status = status
 
 
+class Throttled(RuntimeError):
+    """The source is limiting us (HTTP 429 or a cooldown is active). Reported as status `throttled`."""
+
+    def __init__(self, message: str, until: Any = None):
+        super().__init__(message)
+        self.until = until
+
+
 def is_offline() -> bool:
     return os.environ.get("SOCMINT_OFFLINE", "") not in ("", "0", "false", "False")
 
@@ -117,6 +125,19 @@ class PoliteClient:
             self._last_call[host] = time.monotonic()
 
     # -- cache ----------------------------------------------------------------
+    @staticmethod
+    def _cache_key(method: str, url: str, params: dict[str, Any] | None, json_body: Any, extra: str) -> str:
+        safe_params = {k: v for k, v in (params or {}).items() if "key" not in k.lower()}
+        safe_url = url.split("?key=")[0]
+        body_key = json.dumps(json_body, sort_keys=True) if json_body is not None else ""
+        return f"{method} {safe_url} {json.dumps(safe_params, sort_keys=True)} {body_key} {extra}"
+
+    def forget(self, url: str, params: dict[str, Any] | None = None, method: str = "GET", json_body: Any = None,
+               cache_key_extra: str = "") -> None:
+        """Drop a cached body (e.g. a plain-text "slow down" answer that came back as HTTP 200)."""
+        for p in self._cache_paths(self._cache_key(method, url, params, json_body, cache_key_extra)):
+            p.unlink(missing_ok=True)
+
     def _cache_paths(self, key: str) -> tuple[Path, Path]:
         h = hashlib.sha1(key.encode()).hexdigest()
         return self.cache_dir / f"{h}.bin", self.cache_dir / f"{h}.json"
@@ -151,21 +172,22 @@ class PoliteClient:
         cache_key_extra: str = "",
         json_body: Any = None,
         retries: int | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        retry_statuses: set[int] | None = None,
     ) -> bytes:
         """Fetch `url` and return the body bytes.
 
         cache_ttl: seconds to reuse a cached body (None = config default, 0 = no cache; use 0 for images
         so image files are never written to disk).
         retries: override the client's retry count for this call (e.g. 0 for interactive collection).
+        timeout: per-call timeout (e.g. httpx.Timeout(30, connect=10)); None = the client default.
+        retry_statuses: HTTP statuses worth retrying (default 429 and 5xx); `set()` retries network errors only.
         Raises OfflineError, RobotsDisallowed or HttpError.
         """
         if is_offline():
             raise OfflineError(f"offline mode: refusing to fetch {url}")
         ttl = float(threshold("ingest.cache_ttl_s", 3600)) if cache_ttl is None else cache_ttl
-        safe_params = {k: v for k, v in (params or {}).items() if "key" not in k.lower()}
-        safe_url = url.split("?key=")[0]
-        body_key = json.dumps(json_body, sort_keys=True) if json_body is not None else ""
-        key = f"{method} {safe_url} {json.dumps(safe_params, sort_keys=True)} {body_key} {cache_key_extra}"
+        key = self._cache_key(method, url, params, json_body, cache_key_extra)
         cached = self._cache_get(key, ttl)
         if cached is not None:
             return cached
@@ -175,10 +197,13 @@ class PoliteClient:
         host = urlparse(url).netloc
         last_exc: Exception | None = None
         max_retries = self.retries if retries is None else retries
+        retryable = _RETRYABLE if retry_statuses is None else retry_statuses
         for attempt in range(max_retries + 1):
             self._wait(host)
             try:
-                r = self._client.request(method, url, params=params, headers=headers, auth=auth, data=data, json=json_body)
+                r = self._client.request(method, url, params=params, headers=headers, auth=auth, data=data,
+                                         json=json_body,
+                                         timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout)
             except httpx.HTTPError as e:
                 last_exc = e
                 status = None
@@ -188,11 +213,11 @@ class PoliteClient:
                     if ttl > 0:
                         self._cache_put(key, r.content, str(r.url), status)
                     return r.content
-                if status not in _RETRYABLE:
+                if status not in retryable or attempt >= max_retries:
                     raise HttpError(f"HTTP {status} for {url}", status)
                 last_exc = HttpError(f"HTTP {status} for {url}", status)
                 retry_after = r.headers.get("retry-after")
-                if retry_after and retry_after.isdigit():
+                if retry_after and retry_after.isdigit():  # only slept when a retry follows
                     time.sleep(min(int(retry_after), 60))
             if attempt < max_retries:
                 backoff = min(2**attempt * 1.5, 30)

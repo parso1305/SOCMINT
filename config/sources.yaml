@@ -43,6 +43,9 @@ sources:
   - name: gdelt_india
     type: gdelt
     rate_limit_s: 10         # GDELT asks for at most one request every 5 seconds; it penalises bursts per IP
+    connect_timeout_s: 10    # investigations: one retry after a timeout / connection error, never after HTTP 429
+    read_timeout_s: 30
+    cache_ttl_s: 1800        # a second "Collect now" within 30 min is served from the HTTP cache
     timespan: 1d
     maxrecords: 75
     queries:

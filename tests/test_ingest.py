@@ -31,6 +31,9 @@ class FakeClient:
     def set_rate_limit(self, host, seconds):
         pass
 
+    def forget(self, url, **kw):
+        pass
+
     def get(self, url, **kw):
         for key, val in self.routes.items():
             if key in url:
