@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -204,12 +205,15 @@ def _window_ok(when: datetime | None, cfg: InvestigationConfig) -> bool:
 # ------------------------------------------------------------------------------------------- collect
 def collect(ref: int | str, only_source: str | None = None, factory: SourceFactory | None = None,
             progress: Callable[[str, dict[str, Any]], None] | None = None, enrich_after: bool = True,
-            who: str | None = None, resolver: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+            who: str | None = None, resolver: Callable[[str], list[dict[str, Any]]] | None = None,
+            stop: threading.Event | None = None) -> dict[str, Any]:
     """Collect for one investigation: every configured source in isolation (one failure never stops the rest).
 
     Writes collection_runs + audit_log rows, links posts (with `matched_by`) and accounts, derives edges,
     then enriches the new posts. `progress(source, run_dict)` is called after each source (dashboard status).
     `factory` / `resolver` replace real sources (the offline demo and tests use them).
+    `stop` (set by Ctrl+C in `investigate watch`): sources already fetching finish and are stored; the rest are
+    not started and are listed in `skipped`.
     """
     inv = get(ref)
     cfg = config_of(inv)
@@ -240,13 +244,24 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     # Fetch in parallel (network only); store sequentially here, in completion order, so SQLite sees one writer
     # and `progress` (Streamlit) is only ever called from this thread.
     workers = max(1, int(threshold("investigate.max_parallel_sources", 4)))
+    skipped: list[str] = []
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="collect") as pool:
-        futures = [pool.submit(_fetch_one, inv, cfg, logical, scfg, factory, since, limit) for logical, scfg in jobs]
+        futures = {pool.submit(_fetch_one, inv, cfg, logical, scfg, factory, since, limit, stop): scfg["name"]
+                   for logical, scfg in jobs}
         for fut in as_completed(futures):
+            if fut.cancelled():
+                skipped.append(futures[fut])
+                continue
             fetched = fut.result()
+            if fetched.status == _NOT_STARTED:
+                skipped.append(fetched.name)
+                continue
             run, ids = _store_fetched(inv, fetched)
             new_ids |= ids
             report(fetched.name, run)
+            if stop is not None and stop.is_set():
+                for f in futures:
+                    f.cancel()  # not started yet: never started (a worker that already took one sees `stop`)
     _link_top_authors(inv.id)
     enriched: dict[str, Any] = {}
     if enrich_after and new_ids:
@@ -254,8 +269,9 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     with session_scope() as s:
         row = s.get(Investigation, inv.id)
         row.last_collected_at = utcnow()
+    stopped = bool(stop is not None and stop.is_set())
     return {"investigation_id": inv.id, "since": since.isoformat(), "runs": runs, "new_posts": len(new_ids),
-            "enrich": enriched}
+            "enrich": enriched, "stopped": stopped, "skipped": skipped}
 
 
 def _finish_run(inv: Investigation, source: str, status: str, started: datetime | None = None, fetched: int = 0,
@@ -295,10 +311,16 @@ def _store_fetched(inv: Investigation, f: _Fetched) -> tuple[dict[str, Any], set
                        detail=(detail or "") + f" ({time.monotonic() - f.t0:.1f} s)", mode=f.res.mode), new_ids
 
 
+_NOT_STARTED = "not_started"  # internal: a watch was stopped before this source began; no run row is written
+
+
 def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg: dict[str, Any],
-               factory: SourceFactory, since: datetime, limit: int) -> _Fetched:
+               factory: SourceFactory, since: datetime, limit: int, stop: threading.Event | None = None) -> _Fetched:
     """Fetch step (worker thread): network only, no DB access, never raises."""
     out = _Fetched(name=scfg["name"], started=utcnow(), t0=time.monotonic())
+    if stop is not None and stop.is_set():
+        out.status = _NOT_STARTED
+        return out
     # per-investigation scoping of "search within" lists (Telegram channels, subreddits)
     scfg = dict(scfg)
     if logical == "telegram" and (cfg.channels.get("telegram") or cfg.handles.get("telegram")):

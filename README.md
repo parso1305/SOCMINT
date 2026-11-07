@@ -79,6 +79,7 @@ uv run socmint investigate create --kind event --name "test" --terms "flood,ब�
 uv run socmint investigate collect "test"           # Bluesky, Mastodon, news RSS, GDELT (+ YouTube / Fact Check with keys)
 uv run socmint investigate edit "test" --add-terms "पूर, धरण" --lang mr --add-source youtube   # audited before/after
 uv run socmint investigate analyze "test"           # narratives, possible coordination, market risk (scoped)
+uv run socmint investigate watch "test" --every 15m --for 8h --analyze   # repeat; Ctrl+C stops after the current source
 uv run socmint investigate show "test"              # summary + suggested terms to widen an event (--json for everything)
 uv run socmint investigate export "test" --format csv   # data/exports/... with a SHA-256 manifest
 uv run socmint investigate create --kind subject --name "Platform accounts" --purpose "why" --handle bluesky:bsky.app --handle mastodon:@Mastodon@mastodon.social
@@ -106,7 +107,7 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `socmint bot` / `api` / `dashboard` | Interfaces (all bind to localhost) |
 | `socmint purge` | Delete raw media older than `RETENTION_DAYS` |
 | `socmint demo` | Offline synthetic end-to-end demo |
-| `socmint investigate create\|list\|edit\|collect\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
+| `socmint investigate create\|list\|edit\|collect\|watch\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
 | `socmint showcase [--demo] [--rebuild]` | One-page showcase dashboard on 127.0.0.1:8502 (`--demo` opens data/demo.db, building it offline if needed; `--rebuild` forces a build) |
 | `socmint telegram-login` | One-time Telethon login for reading public channels |
 

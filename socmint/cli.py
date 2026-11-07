@@ -384,6 +384,51 @@ def inv_collect(ref: str = typer.Argument(..., help="Investigation id or name.")
                + (f"   degraded: {out['enrich']['degraded']}" if out["enrich"].get("degraded") else ""))
 
 
+@inv_app.command("watch")
+def inv_watch(ref: str = typer.Argument(..., help="Investigation id or name."),
+              every: str = typer.Option("15m", "--every", help="Time between cycles (at least 5m), e.g. 15m, 1h."),
+              for_: str = typer.Option(None, "--for", help="Stop after this long, e.g. 8h (default: until Ctrl+C)."),
+              analyze: bool = typer.Option(False, "--analyze", help="Also run narratives/coordination/market "
+                                                                    "each cycle.")) -> None:
+    """Collect again every cycle (audited, one line per cycle). Ctrl+C stops after the current source."""
+    import signal
+    import threading
+
+    from socmint.core.db import init_db
+    from socmint.ingest.registry import sync_brands
+    from socmint.investigate.watch import parse_duration, watch
+
+    init_db()
+    sync_brands()
+    try:
+        every_s = parse_duration(every)
+        for_s = parse_duration(for_) if for_ else None
+    except ValueError as e:
+        typer.echo(f"not started: {e}", err=True)
+        raise typer.Exit(1) from None
+    iid = _inv_ref(ref)
+    stop = threading.Event()
+
+    def on_ctrl_c(signum, frame) -> None:  # noqa: ARG001
+        if stop.is_set():
+            raise KeyboardInterrupt
+        stop.set()
+        typer.echo("\nCtrl+C: stopping after the current source (press Ctrl+C again to quit now)")
+
+    previous = signal.signal(signal.SIGINT, on_ctrl_c)
+    try:
+        typer.echo(f"watching #{iid} every {every_s // 60} min"
+                   + (f" for {for_s / 3600:.1f} h" if for_s else " until Ctrl+C")
+                   + (" with analyze" if analyze else "") + "; Ctrl+C stops after the current source")
+        out = watch(iid, every_s, for_s, analyze=analyze, echo=typer.echo, stop=stop)
+    except ValueError as e:
+        typer.echo(f"not started: {e}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    typer.echo(f"watch ended ({out['reason']}): {out['cycles']} cycles, {out['new_posts']} new posts")
+
+
 @inv_app.command("analyze")
 def inv_analyze(ref: str = typer.Argument(..., help="Investigation id or name.")) -> None:
     """Narratives, possible coordination and market risk, scoped to this investigation's posts."""

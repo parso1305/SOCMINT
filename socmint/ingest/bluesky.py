@@ -175,6 +175,7 @@ class BlueskySource(Source):
 
     type_name = "bluesky"
     capabilities = {"terms", "accounts"}
+    listener: Any = None  # set by `investigate watch`: a long-lived JetstreamListener replaces the 60 s listen
 
     def hosts(self) -> list[str]:
         return [APPVIEW + "/"] + ([bluesky_auth.ENTRYWAY + "/"] if bluesky_auth.configured() else [])
@@ -199,14 +200,36 @@ class BlueskySource(Source):
                 if mode == "search" or e.status not in (401, 403):
                     raise
                 res = self._listen_for(matcher, since, limit)
-                res.notes.insert(0, f"searchPosts on the public AppView answered HTTP {e.status}; used a bounded "
-                                    "Jetstream listen instead (only posts made during the listen window)")
+                how = ("the watch's Jetstream connection instead (posts since the watch started)" if self.listener
+                       else "a bounded Jetstream listen instead (only posts made during the listen window)")
+                res.notes.insert(0, f"searchPosts on the public AppView answered HTTP {e.status}; used {how}")
                 return res
         return self._listen_for(matcher, since, limit)
 
     def _listen_for(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:
+        if self.listener is not None:
+            return self._from_listener()
         res = self._jetstream(matcher, since, limit)
         res.mode = f"live listen {float(self.cfg.get('jetstream_max_seconds', 60)):.0f} s"
+        return res
+
+    def _from_listener(self) -> FetchResult:
+        """Drain the watch's Jetstream queue and hydrate it (public AppView: counts, labels, opt-outs)."""
+        lst = self.listener
+        matched = lst.drain()
+        scanned = lst.scanned - getattr(lst, "reported_scanned", 0)
+        dropped = lst.dropped - getattr(lst, "reported_dropped", 0)
+        lst.reported_scanned, lst.reported_dropped = lst.scanned, lst.dropped
+        res = self._hydrate(matched)
+        res.mode = "live listen (watch)"
+        note = (f"Jetstream watch: {scanned} new posts scanned since the last cycle, {len(matched)} matched, "
+                f"{len(res.items)} kept after public-AppView hydration and opt-out checks")
+        if dropped:
+            note += f"; {dropped} matches dropped (queue full: collect more often)"
+            res.partial = True
+        if lst.reconnects:
+            note += f"; reconnected {lst.reconnects} times, resuming from the last event received"
+        res.notes.append(note)
         return res
 
     def _search_api(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:

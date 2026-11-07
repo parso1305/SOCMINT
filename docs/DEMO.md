@@ -96,6 +96,27 @@ What to expect live (as of 2026-11-06):
 A collect takes from about 20 s (subject) to 1–2 minutes (event, mostly the Bluesky listen). Then run *analyze*
 (CLI), or simply reopen the investigation in the showcase.
 
+### Start a watch the day before the meeting
+One collect only sees what the sources return at that moment, and Bluesky without an app password only sees posts
+made during its 60 s listen. A **watch** collects again every cycle, so by the meeting the event has hours of
+history:
+
+```powershell
+$env:SOCMINT_DB_URL = "sqlite:///C:/Project/SOCMINT/data/live.db"   # a separate DB for the live demo
+.venv\Scripts\socmint.exe investigate watch "delhi-air" --every 15m --for 20h --analyze
+```
+
+- Every cycle is audited and prints one line (`cycle 3 · 14:05 UTC · 12 new posts · bluesky ok (5 new), gdelt throttled …`).
+- Bluesky without an app password: the watch keeps **one** Jetstream connection open the whole time and matches
+  posts as they arrive, so each cycle stores every matching post made since the watch started. If the connection
+  drops it resumes from the last event it received, never from further back.
+- GDELT in a cooldown is skipped without a request; it rejoins by itself when the cooldown ends.
+- `--every` is at least 5 minutes. Ctrl+C stops after the source that is fetching; a second Ctrl+C quits at once.
+- Leave the terminal open (and the laptop awake). Narrative growth alerts need 72 h of collection history
+  (`narratives.min_baseline_hours`); a day of watching already gives the showcase real posts-over-time charts.
+- YouTube (if `YOUTUBE_API_KEY` is set) spends up to `max_units_per_run` (1,500) quota units per cycle against a
+  10,000/day free quota: for a long watch use `--every 1h` or lower `max_units_per_run` in `config/sources.yaml`.
+
 ## Guardrails to point out
 - A purpose is required for every investigation and is stored with it.
 - Only public posts and public profile fields from official APIs. No identity resolution across platforms. Opt-outs
