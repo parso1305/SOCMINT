@@ -75,14 +75,20 @@ def source_label(name: str) -> str:
 
 
 def source_status(d: dict[str, Any]) -> list[dict[str, Any]]:
+    """One chip per source: this investigation's total posts from it ("Bluesky (demo) · 5 posts"), coloured by the
+    last run's status; a last run that was not `ok` is named too. The last run's new count is in `last` and in the
+    collection log (a later run that finds nothing new must not make a source look empty)."""
     out = []
+    totals = d["summary"].get("by_source", {})
     for k, r in d["summary"]["collection"]["latest_by_source"].items():
         label = source_label(k)
         status = normalize(r["status"])
-        state = f"{r['new']} new" if status == "ok" else status.replace("_", " ")
+        posts = int(totals.get(k, 0))
         how = f"{r['mode']} · " if r.get("mode") else ""  # e.g. "search (logged in)", "live listen 60 s"
-        out.append({"source": k, "label": label, "text": f"{label} · {how}{state}", "status": status,
-                    "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
+        failed = "" if status == "ok" else f" · {status.replace('_', ' ')}"
+        out.append({"source": k, "label": label, "text": f"{label} · {how}{posts} posts{failed}", "status": status,
+                    "posts": posts, "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
+                    "last": f"last run: {status.replace('_', ' ')}, {r['new']} new of {r['fetched']} fetched",
                     "color": STATUS_COLOR[status]})
     return sorted(out, key=lambda c: c["label"].lower())
 

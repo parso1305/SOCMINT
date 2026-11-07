@@ -113,6 +113,8 @@ c4.metric("Sources", h["sources"])
 chips = data.source_status(d)
 if chips:
     st.markdown(" ".join(f":{c['color']}-background[{c['text']}]" for c in chips))
+    st.caption("Posts per source in this investigation; the colour is the last run's status. Each run's status and "
+               "new posts are in Evidence & export → Collection log.")
 
 ov, posts_tab, people, network, evidence = st.tabs(
     ["Overview", "Posts", "People & accounts", "Network", "Evidence & export"])

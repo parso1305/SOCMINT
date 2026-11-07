@@ -176,11 +176,29 @@ def test_source_chips_use_friendly_names(showcase_db, monkeypatch):
     assert data.source_label("something_new") == "Something New"
     url, ids = showcase_db
     _use(url, monkeypatch)
-    chips = data.source_status(data.load(ids["event"]))
+    d = data.load(ids["event"])
+    chips = data.source_status(d)
     assert {c["label"] for c in chips} >= {"Bluesky (demo)", "YouTube (demo)", "News (demo)"}
-    assert all(c["text"].startswith(c["label"] + " · ") and c["text"].endswith(" new") for c in chips)
+    # M20.3: a chip shows the investigation's total posts from that source, not the last run's new count
+    by_source = d["summary"]["by_source"]
+    assert all(c["text"] == f"{c['label']} · {by_source[c['source']]} posts" for c in chips)
+    group = data.source_status(data.load(ids["group"]))  # its last runs found 0 new: the posts were already linked
+    assert group and all(c["posts"] > 0 and c["text"].endswith(f" · {c['posts']} posts") for c in group)
     at = AppTest.from_file(str(APP), default_timeout=120)
     at.session_state["inv_id"] = ids["event"]
     at.run()
     md = "\n".join(m.value for m in at.markdown)
-    assert "Bluesky (demo) · " in md and "demo_bluesky:" not in md
+    assert f"Bluesky (demo) · {by_source['demo_bluesky']} posts" in md and "demo_bluesky:" not in md
+    assert any("Collection log" in c.value for c in at.caption)  # where the last run per source is shown
+
+
+def test_chip_names_a_failed_last_run_and_keeps_the_search_mode():
+    from socmint.showcase import data
+
+    d = {"summary": {"by_source": {"demo_bluesky": 5}, "collection": {"latest_by_source": {
+        "demo_bluesky": {"status": "ok", "new": 0, "fetched": 3, "detail": "", "mode": "live listen 60 s"},
+        "demo_mastodon": {"status": "throttled", "new": 0, "fetched": 0, "detail": "HTTP 429", "mode": None}}}}}
+    chips = {c["source"]: c for c in data.source_status(d)}
+    assert chips["demo_bluesky"]["text"] == "Bluesky (demo) · live listen 60 s · 5 posts"
+    assert chips["demo_mastodon"]["text"] == "Mastodon (demo) · 0 posts · throttled"
+    assert chips["demo_bluesky"]["last"] == "last run: ok, 0 new of 3 fetched"

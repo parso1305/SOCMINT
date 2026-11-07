@@ -25,7 +25,8 @@ The yellow **DEMO DATA (synthetic)** banner is shown on every investigation.
 
 **1. Event: "Pune floods 2026 (demo)"** (selected by default)
 - *Header*: about 290 posts from six sources (Bluesky, Mastodon, Telegram, Reddit, YouTube, news). The chips show each
-  source's last collection status (`Bluesky (demo) · 77 new`).
+  source's posts in this investigation (`Bluesky (demo) · 77 posts`), coloured by its last run's status; each run's
+  status and new posts are in the collection log.
 - *Overview*: the posts-per-6-hours chart peaks about 2½ days ago, when the rain was heaviest. **Key findings** lists,
   in order: the possible-coordination group, the fact-check match, the scam indicators, the fastest-growing narrative
   ("burst, demosagar, dam, flood") and the most common category. Growth is rated because the demo event carries a
