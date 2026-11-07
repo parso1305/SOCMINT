@@ -248,3 +248,19 @@ def test_baseline_note_keeps_the_module_note():
     iid = runner.create(event_cfg(sources=["bluesky"]))
     res = runner.analyze(iid, modules=("narratives",))["modules"]["narratives"]["result"]
     assert "not enough items in window" in res["note"] and "growth alerts held back" in res["note"]
+
+
+def test_show_prints_times_to_the_minute():
+    """M20.5: `investigate show` prints first/last seen to the minute (no seconds or microseconds)."""
+    import re
+
+    from typer.testing import CliRunner
+
+    from socmint import cli
+
+    iid = runner.create(event_cfg(sources=["bluesky"]))
+    runner.collect(iid, factory=factory, enrich_after=False)
+    out = CliRunner().invoke(cli.app, ["investigate", "show", str(iid)])
+    assert out.exit_code == 0, out.output
+    line = next(ln for ln in out.output.splitlines() if ln.startswith("posts "))
+    assert re.search(r"first \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC · last \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$", line), line

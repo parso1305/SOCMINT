@@ -263,6 +263,11 @@ inv_app = typer.Typer(help="Investigations: events, subjects (public accounts) a
 app.add_typer(inv_app, name="investigate")
 
 
+def _minute(t: object) -> str:
+    """A UTC time to the minute for CLI output ("2026-11-07 14:05 UTC"); "-" when unknown."""
+    return f"{t:%Y-%m-%d %H:%M} UTC" if t else "-"
+
+
 def _inv_ref(ref: str) -> int:
     from socmint.investigate.runner import InvestigationNotFound, get
 
@@ -462,7 +467,7 @@ def inv_show(ref: str = typer.Argument(..., help="Investigation id or name."),
     typer.echo(f"#{i['id']} [{i['kind']}] {i['name']}" + ("  (synthetic)" if i["synthetic"] else ""))
     typer.echo(f"purpose: {i['purpose']}")
     typer.echo(f"posts {c['posts']} · sources {c['sources']} · accounts {c['accounts']} · "
-               f"first {s['first_seen']} · last {s['last_seen']}")
+               f"first {_minute(s['first_seen'])} · last {_minute(s['last_seen'])}")
     typer.echo(f"by source:   {s['by_source']}\nby language: {s['by_language']}\nby category: {s['by_category']}")
     typer.echo(f"top hashtags: {s['top_hashtags'][:8]}\ntop domains:  {s['top_domains'][:8]}")
     for a in s["top_accounts"][:8]:

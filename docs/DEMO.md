@@ -12,6 +12,9 @@ uv run socmint showcase --demo         # in the meeting: reuses data/demo.db and
 # open http://127.0.0.1:8502
 ```
 
+On Windows, if `uv` isn't on PATH, use `python -m uv run socmint …` or
+`.\.venv\Scripts\socmint.exe …` (the same commands without `uv run`).
+
 `--demo` reuses `data/demo.db` when it exists, has the current schema and holds the three showcase investigations;
 otherwise it builds it first. The demo's "last 24 h" numbers are relative to when it was built, so a reused
 `demo.db` older than 12 h (`showcase.demo_max_age_hours`) makes `--demo` print a warning, `socmint doctor` reports
@@ -122,6 +125,36 @@ $env:SOCMINT_DB_URL = "sqlite:///C:/Project/SOCMINT/data/live.db"   # a separate
   (`narratives.min_baseline_hours`); a day of watching already gives the showcase real posts-over-time charts.
 - YouTube (if `YOUTUBE_API_KEY` is set) spends up to `max_units_per_run` (1,500) quota units per cycle against a
   10,000/day free quota: for a long watch use `--every 1h` or lower `max_units_per_run` in `config/sources.yaml`.
+
+## Live demo recipe
+
+Real posts need time to arrive, so start the day before. PowerShell, in the project folder; the live demo gets its own
+database so `data/socmint.db` stays as it is:
+
+1. **Check the machine**: keys (set/missing only), sources, reachability, models, ports and the age of the demo data.
+   ```powershell
+   $env:SOCMINT_DB_URL = "sqlite:///C:/Project/SOCMINT/data/live.db"
+   .venv\Scripts\socmint.exe doctor
+   ```
+2. **Create the event with specific terms**: a place plus a topic, and a hashtag, in English, Hindi and Marathi.
+   Generic words ("pollution", "प्रदूषण") match too much; "Delhi AQI" and `#DelhiPollution` match the event.
+   ```powershell
+   .venv\Scripts\socmint.exe investigate create --kind event --name "delhi-air" --purpose "Public-safety monitoring of air-quality advisories and rumours (demo)" --terms "Delhi pollution,Delhi AQI,Delhi smog,#DelhiPollution,#DelhiAQI"
+   .venv\Scripts\socmint.exe investigate edit "delhi-air" --add-terms "दिल्ली प्रदूषण,दिल्ली की हवा,दिल्ली स्मॉग" --lang hi
+   .venv\Scripts\socmint.exe investigate edit "delhi-air" --add-terms "दिल्लीतील प्रदूषण,दिल्लीची हवा" --lang mr
+   ```
+   (The showcase's *New investigation* form does the same in one step: it has Hindi and Marathi term lines.)
+3. **Start the watch the day before** (see [above](#start-a-watch-the-day-before-the-meeting)) and leave it running:
+   ```powershell
+   .venv\Scripts\socmint.exe investigate watch "delhi-air" --every 15m --for 20h --analyze
+   ```
+4. **Add suggested terms** after a few cycles: `investigate show "delhi-air"` lists hashtags, names and Hindi/Marathi
+   words that 3+ posts from 2+ accounts use, with the `investigate edit` command to add one. In the showcase:
+   *Overview* → *Suggested terms* → **Add selected**. Nothing is added automatically, and every edit is audited.
+5. **Open the showcase** on the same database (a second terminal, with the same `$env:SOCMINT_DB_URL`):
+   ```powershell
+   .venv\Scripts\socmint.exe showcase      # http://127.0.0.1:8502
+   ```
 
 ## Guardrails to point out
 - A purpose is required for every investigation and is stored with it.

@@ -45,6 +45,10 @@ uv run socmint check "test"         # first run downloads multilingual-e5-small 
 
 Without `uv`: `python -m venv .venv`, activate it, then `pip install -e ".[dev]"` (add `,ml` for the ML extra).
 
+**Windows:** if `uv` isn't on PATH after `pip install uv` (common with the python.org installer), use
+`python -m uv run socmint …`, or run the installed script directly:
+`.\.venv\Scripts\socmint.exe …` (`socmint doctor` checks this).
+
 ### Platform notes
 | | Windows | macOS | Linux |
 |---|---|---|---|
