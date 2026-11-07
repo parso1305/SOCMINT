@@ -6,6 +6,7 @@ their own language."""
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,9 @@ from typer.testing import CliRunner
 from socmint import cli
 from socmint.core.db import session_scope
 from socmint.core.models import AuditLog
+from socmint.core.schemas import FetchResult
 from socmint.core.settings import reset_settings
+from socmint.ingest.base import Source
 from socmint.investigate import runner
 from socmint.investigate.config import NO_KEY_SOURCES, InvestigationConfig, default_event_sources, source_plan
 
@@ -108,6 +111,65 @@ def test_edit_refuses_bad_changes_without_writing_anything():
         runner.edit(iid, add_terms=["Delhi smog"])  # already there
     assert _audits() == []
     assert runner.config_of(runner.get(iid)).terms == {"en": ["Delhi smog"]}
+
+
+class _SinceRecorder(Source):
+    """Records the `since` each collect passes; `during` runs inside the search (an edit made mid-collect)."""
+
+    type_name = "since_recorder"
+    capabilities = {"terms"}
+    calls: list[tuple[datetime, dict[str, list[str]]]] = []
+    during: list = []
+
+    def fetch(self, since):
+        return FetchResult()
+
+    def search_terms(self, terms_by_lang, since, limit):
+        _SinceRecorder.calls.append((since, terms_by_lang))
+        while _SinceRecorder.during:
+            _SinceRecorder.during.pop(0)()
+        return FetchResult()
+
+
+def _collect(iid: int) -> tuple[datetime, dict[str, list[str]]]:
+    runner.collect(iid, factory=lambda logical, cfg: _SinceRecorder({**cfg, "name": logical}), enrich_after=False)
+    return _SinceRecorder.calls[-1]
+
+
+@pytest.fixture
+def recorder(monkeypatch):
+    monkeypatch.setattr(runner, "resolve_sources", lambda logical: [{"name": logical, "type": logical}])
+    _SinceRecorder.calls, _SinceRecorder.during = [], []
+    return _SinceRecorder
+
+
+def test_terms_added_by_edit_are_searched_over_the_whole_window_at_the_next_collect(recorder):
+    """A term added after a collect was never searched: the next collect starts at the window's origin again (as
+    the first one did), so the term's earlier posts are found; the collect after that is incremental again."""
+    iid = runner.create(event(sources=["bluesky"]))
+    origin, _ = _collect(iid)
+    incremental, _ = _collect(iid)
+    assert incremental - origin > timedelta(days=6)  # since the last collect
+    runner.edit(iid, add_terms=["Diwali"])
+    since, terms = _collect(iid)
+    assert "Diwali" in terms["en"] and abs(since - origin) < timedelta(minutes=1)
+    assert _collect(iid)[0] - origin > timedelta(days=6)
+    runner.edit(iid, purpose="only the purpose changed")  # nothing new to search: stays incremental
+    assert _collect(iid)[0] - origin > timedelta(days=6)
+    runner.edit(iid, add_sources=["mastodon"])  # a new source was never searched either
+    assert abs(_collect(iid)[0] - origin) < timedelta(minutes=1)
+
+
+def test_a_term_added_while_a_collect_runs_is_searched_over_the_whole_window_next_time(recorder):
+    """`investigate watch` in one terminal, 'Add selected' in the showcase in another: the collect that was running
+    used the old terms, so the next one must still go back to the window's origin."""
+    iid = runner.create(event(sources=["bluesky"]))
+    origin, _ = _collect(iid)
+    recorder.during.append(lambda: runner.edit(iid, add_terms=["Diwali"]))
+    _, terms = _collect(iid)
+    assert "Diwali" not in terms["en"]  # this collect started before the edit
+    since, terms = _collect(iid)
+    assert "Diwali" in terms["en"] and abs(since - origin) < timedelta(minutes=1)
 
 
 def test_edit_cli():

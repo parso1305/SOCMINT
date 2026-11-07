@@ -114,7 +114,9 @@ class Investigation(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | paused | archived
     config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    last_collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # start of the last collect
+    # set by `edit` when it adds terms or sources: they were never searched, so the next collect covers the window
+    widened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_analysis: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 

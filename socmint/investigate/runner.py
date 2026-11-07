@@ -113,10 +113,15 @@ def edit(ref: int | str, add_terms: list[str] | None = None, remove_terms: list[
     if not changed:
         raise ValueError("nothing to change: the terms, sources and purpose are already like that")
     change = {"id": inv.id, "before": {k: before[k] for k in changed}, "after": {k: after[k] for k in changed}}
+    old_terms = {t.casefold() for v in cfg.terms.values() for t in v}
+    widened = (any(t.casefold() not in old_terms for v in new.terms.values() for t in v)
+               or bool(set(new.sources) - set(cfg.sources)))
     with session_scope() as s:
         row = s.get(Investigation, inv.id)
         row.config = new.to_json()
         row.purpose = new.purpose
+        if widened:  # never searched yet: the next collect searches the whole window, not just since the last one
+            row.widened_at = utcnow()
         audit(s, who or actor(), "investigation_edit", json.dumps(change, ensure_ascii=False))
     return change
 
@@ -173,6 +178,10 @@ def default_factory(logical: str, cfg: dict[str, Any]) -> Source:
 
 
 def _since(inv: Investigation, cfg: InvestigationConfig) -> datetime:
+    """Where this collect starts: the start of the last collect, or the window's origin when there was none or when
+    `edit` added terms or sources after the last collect began (they were never searched)."""
+    if inv.last_collected_at and inv.widened_at and inv.widened_at >= inv.last_collected_at:
+        return _origin(inv, cfg)
     if inv.last_collected_at:
         return inv.last_collected_at
     if cfg.window.start:
@@ -215,6 +224,7 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     `stop` (set by Ctrl+C in `investigate watch`): sources already fetching finish and are stored; the rest are
     not started and are listed in `skipped`.
     """
+    started = utcnow()  # read before the config: an edit made while this collect runs is newer than it
     inv = get(ref)
     cfg = config_of(inv)
     factory = factory or default_factory
@@ -280,7 +290,7 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     _link_top_authors(inv.id)
     with session_scope() as s:
         row = s.get(Investigation, inv.id)
-        row.last_collected_at = utcnow()
+        row.last_collected_at = started  # the next collect overlaps this one (stored posts are de-duplicated)
     stopped = bool(stop is not None and stop.is_set())
     return {"investigation_id": inv.id, "since": since.isoformat(), "runs": runs, "new_posts": len(new_ids),
             "enrich": enriched, "stopped": stopped, "skipped": skipped}
