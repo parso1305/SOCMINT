@@ -83,6 +83,31 @@ Official AT Protocol AppView and Jetstream endpoints only; no login, no app pass
 - Limitation: the Jetstream fallback only sees posts made while it listens, so it rarely finds rare terms. On
   2026-11-06 a 60 s listen scanned 2,140 posts and none matched "flood / बाढ़".
 
+### Bluesky logged-in search (optional, M18.1) — route from docs.bsky.app, checked 2026-11-07
+Only used when `BLUESKY_HANDLE` and `BLUESKY_APP_PASSWORD` are both in `.env`. This is Bluesky's **documented route
+for logged-in clients**, not a way around the public 403: the call goes to the account's own PDS, which proxies it
+to the AppView.
+
+| Step | Endpoint | Auth |
+|---|---|---|
+| Log in | `POST https://bsky.social/xrpc/com.atproto.server.createSession` `{identifier, password}` | app password |
+| Find the PDS | `didDoc.service[#atproto_pds].serviceEndpoint` from the login answer (fallback `https://bsky.social`) | — |
+| Refresh | `POST {pds}/xrpc/com.atproto.server.refreshSession` | `Bearer <refreshJwt>` |
+| Search | `GET {pds}/xrpc/app.bsky.feed.searchPosts?q=&sort=latest&since=&limit<=100&cursor=` | `Bearer <accessJwt>` + `atproto-proxy: did:web:api.bsky.app#bsky_appview` |
+
+- `api.bsky.app` and `public.api.bsky.app` do not accept auth and are never sent a token.
+- `createSession` is limited to 30 per 5 minutes and 300 per day per account, so the session (`accessJwt`,
+  `refreshJwt`, `did`, `pds`) is reused from `data/cache/bluesky_session.json` (git-ignored). On HTTP 401 or an
+  `ExpiredToken` answer: refresh once, then log in again once, then the run fails as `error`.
+- The cursor is followed up to the term's share of `investigate.per_source_limit` (200).
+- Authenticated calls are never written to the HTTP disk cache; tokens never reach logs, errors or `collection_runs`.
+- Opt-outs: unchanged. `!no-unauthenticated` authors are dropped even when logged in, because our output leaves the
+  platform (treated like a logged-out view).
+- `search_mode: auto` order: logged-in search (keys set) → public `searchPosts` → bounded Jetstream listen. The chip
+  and the CLI line say which was used (`search (logged in)`, `search (public)`, `live listen 60 s`).
+- Not verified live: no project account is configured in this checkout (`BLUESKY_HANDLE` missing), so only the
+  mocked tests (`tests/test_bluesky_auth.py`) exercise this route.
+
 ## Mastodon (no key) — verified 2026-11-06
 Instance REST API, unauthenticated, read-only. Instances are listed in `sources.yaml` (`mastodon.social`).
 

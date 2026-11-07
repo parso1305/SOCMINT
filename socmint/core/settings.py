@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     reddit_client_secret: str = Field(default="", alias="REDDIT_CLIENT_SECRET")
     google_safe_browsing_key: str = Field(default="", alias="GOOGLE_SAFE_BROWSING_KEY")
     urlhaus_auth_key: str = Field(default="", alias="URLHAUS_AUTH_KEY")
+    # Bluesky logged-in search (optional): a dedicated project account + an app password, never the account password
+    bluesky_handle: str = Field(default="", alias="BLUESKY_HANDLE")
+    bluesky_app_password: str = Field(default="", alias="BLUESKY_APP_PASSWORD")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

@@ -123,3 +123,24 @@ def test_doctor_does_not_touch_the_database(monkeypatch):
     res = CliRunner().invoke(app, ["doctor", "--offline"])
     assert res.exit_code in (0, 1), res.output
     assert "PASS" in res.output and "CONTACT_EMAIL" in res.output and "Tesseract" in res.output
+
+
+def test_bluesky_login_keys_are_reported_and_change_the_event_source_line(monkeypatch):
+    from socmint.core.settings import reset_settings
+
+    monkeypatch.setenv("BLUESKY_HANDLE", "")
+    monkeypatch.setenv("BLUESKY_APP_PASSWORD", "")
+    reset_settings()
+    checks = doctor.run_checks(network=False)
+    row = by_name(checks, "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD")[0]
+    assert row.level == "WARN" and "BLUESKY_APP_PASSWORD" in row.fix
+    assert "live listen 60 s" in by_name(checks, "event sources")[0].detail
+
+    monkeypatch.setenv("BLUESKY_HANDLE", "project.bsky.social")
+    monkeypatch.setenv("BLUESKY_APP_PASSWORD", "abcd-efgh-ijkl-mnop")
+    reset_settings()
+    checks = doctor.run_checks(network=False)
+    row = by_name(checks, "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD")[0]
+    assert row.level == "PASS" and "set" in row.detail
+    assert "bluesky (search, logged in)" in by_name(checks, "event sources")[0].detail
+    assert "abcd-efgh-ijkl-mnop" not in doctor.render(checks)

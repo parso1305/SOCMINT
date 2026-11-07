@@ -6,8 +6,13 @@ searchPosts once and, on 401/403, listens to Jetstream (the official JSON fireho
 `jetstream_max_seconds` / `jetstream_max_scanned` posts, matches terms client-side, then hydrates the
 matches through getPosts (public counts and labels). We never switch hosts to get around the 403.
 
+Optional logged-in search (M18.1): with BLUESKY_HANDLE + BLUESKY_APP_PASSWORD in .env, `auto` / `search` modes
+call searchPosts through the account's own PDS (Bluesky's documented route for logged-in clients; see
+`bluesky_auth`). Without the keys nothing changes. A logged-in failure is reported, never routed elsewhere.
+
 Opt-out: accounts labelled `!no-unauthenticated` asked not to be shown to logged-out viewers; their
-profile and posts are never collected. Posts the AppView will not return (deleted, opted out) are dropped.
+profile and posts are never collected, logged in or not (our output leaves the platform, so it is treated
+like a logged-out view). Posts the AppView will not return (deleted, opted out) are dropped.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from typing import Any
 from socmint.core.http import HttpError, OfflineError, RobotsDisallowed, is_offline
 from socmint.core.logging import get_logger
 from socmint.core.schemas import AccountIn, FetchResult, ItemIn
+from socmint.ingest import bluesky_auth
 from socmint.ingest.base import OptedOut, Source, TermMatcher, clean_summary, parse_iso, register
 
 log = get_logger(__name__)
@@ -171,7 +177,7 @@ class BlueskySource(Source):
     capabilities = {"terms", "accounts"}
 
     def hosts(self) -> list[str]:
-        return [APPVIEW + "/"]
+        return [APPVIEW + "/"] + ([bluesky_auth.ENTRYWAY + "/"] if bluesky_auth.configured() else [])
 
     def fetch(self, since: datetime | None) -> FetchResult:
         kws = self.cfg.get("keywords") or []
@@ -179,37 +185,75 @@ class BlueskySource(Source):
 
     # ---------------------------------------------------------------- terms
     def search_terms(self, terms_by_lang: dict[str, list[str]], since: datetime | None, limit: int) -> FetchResult:
+        """`auto`: logged-in search (if the keys are set) -> public searchPosts -> bounded Jetstream listen."""
         matcher = TermMatcher(terms_by_lang)
         mode = self.cfg.get("search_mode", "auto")
+        if mode in ("auto", "search") and bluesky_auth.configured():
+            return self._search_logged_in(matcher, since, limit)
         if mode in ("auto", "search"):
             try:
-                return self._search_api(matcher, since, limit)
+                res = self._search_api(matcher, since, limit)
+                res.mode = "search (public)"
+                return res
             except HttpError as e:
                 if mode == "search" or e.status not in (401, 403):
                     raise
-                res = self._jetstream(matcher, since, limit)
+                res = self._listen_for(matcher, since, limit)
                 res.notes.insert(0, f"searchPosts on the public AppView answered HTTP {e.status}; used a bounded "
                                     "Jetstream listen instead (only posts made during the listen window)")
                 return res
-        return self._jetstream(matcher, since, limit)
+        return self._listen_for(matcher, since, limit)
+
+    def _listen_for(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:
+        res = self._jetstream(matcher, since, limit)
+        res.mode = f"live listen {float(self.cfg.get('jetstream_max_seconds', 60)):.0f} s"
+        return res
 
     def _search_api(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:
+        def public(params: dict[str, Any]) -> Any:
+            return self.client.get_json(f"{APPVIEW}/app.bsky.feed.searchPosts", params=params, cache_ttl=300)
+
+        return self._search(matcher, since, limit, public, follow_cursor=False)
+
+    def _search_logged_in(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:
+        if is_offline():
+            raise OfflineError("offline mode: refusing to log in to Bluesky")
+        session = bluesky_auth.BlueskySession(self.client)
+        res = self._search(matcher, since, limit, lambda p: session.get_json("app.bsky.feed.searchPosts", p),
+                           follow_cursor=True)
+        res.mode = "search (logged in)"
+        return res
+
+    def _search(self, matcher: TermMatcher, since: datetime | None, limit: int, call: Any,
+                follow_cursor: bool) -> FetchResult:
+        """searchPosts per term (sort=latest, since, limit <= 100), following the cursor up to the term's share of
+        `limit` when `follow_cursor`. Opted-out authors are dropped by `parse_post_view`."""
         res = FetchResult()
         seen: set[str] = set()
         per_term = max(10, limit // max(len(matcher.terms), 1))
         for term in matcher.terms:
-            params: dict[str, Any] = {"q": term, "limit": min(100, per_term), "sort": "latest"}
-            if since:
-                params["since"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
-            data = self.client.get_json(f"{APPVIEW}/app.bsky.feed.searchPosts", params=params, cache_ttl=300)
-            for pv in data.get("posts") or []:
-                if pv.get("uri") in seen:
-                    continue
-                seen.add(pv.get("uri"))
-                parsed = parse_post_view(pv, self.name, matcher.match((pv.get("record") or {}).get("text", "")) or [term])
-                if parsed:
-                    res.items.append(parsed[0])
-                    res.accounts.append(parsed[1])
+            fetched, cursor = 0, None
+            while fetched < per_term:
+                params: dict[str, Any] = {"q": term, "limit": min(100, per_term - fetched), "sort": "latest"}
+                if since:
+                    params["since"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+                if cursor:
+                    params["cursor"] = cursor
+                data = call(params)
+                posts = data.get("posts") or []
+                fetched += len(posts)
+                for pv in posts:
+                    if pv.get("uri") in seen:
+                        continue
+                    seen.add(pv.get("uri"))
+                    parsed = parse_post_view(pv, self.name,
+                                             matcher.match((pv.get("record") or {}).get("text", "")) or [term])
+                    if parsed:
+                        res.items.append(parsed[0])
+                        res.accounts.append(parsed[1])
+                cursor = data.get("cursor")
+                if not follow_cursor or not cursor or not posts:
+                    break
         return res
 
     def _jetstream(self, matcher: TermMatcher, since: datetime | None, limit: int) -> FetchResult:

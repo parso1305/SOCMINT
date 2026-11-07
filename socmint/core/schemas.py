@@ -124,6 +124,7 @@ class FetchResult(BaseModel):
     accounts: list[AccountIn] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)  # human-readable run notes (fallbacks, opt-out skips)
     partial: bool = False  # something was fetched but not everything (quota reached, a page failed); see notes
+    mode: str | None = None  # how the source searched, shown on its chip (e.g. "search (logged in)", "live listen 60 s")
 
     def count(self) -> int:
         return sum(len(x) for x in (self.items, self.factchecks, self.indicators, self.domains, self.market, self.symbols))
@@ -133,6 +134,8 @@ class FetchResult(BaseModel):
         for f in type(self).model_fields:
             if f == "partial":
                 self.partial = self.partial or other.partial
+            elif f == "mode":
+                self.mode = self.mode or other.mode
             else:
                 getattr(self, f).extend(getattr(other, f))
         return self

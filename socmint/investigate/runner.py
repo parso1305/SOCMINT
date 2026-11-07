@@ -215,12 +215,12 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
 
 
 def _finish_run(inv: Investigation, source: str, status: str, started: datetime | None = None, fetched: int = 0,
-                new: int = 0, detail: str | None = None) -> dict[str, Any]:
+                new: int = 0, detail: str | None = None, mode: str | None = None) -> dict[str, Any]:
     with session_scope() as s:
         s.add(CollectionRun(investigation_id=inv.id, source=source, started_at=started or utcnow(), finished_at=utcnow(),
                             status=status, fetched=fetched, new=new, detail=(detail or None) and detail[:2000],
-                            synthetic=inv.synthetic))
-    return {"source": source, "status": status, "fetched": fetched, "new": new, "detail": detail}
+                            mode=mode, synthetic=inv.synthetic))
+    return {"source": source, "status": status, "fetched": fetched, "new": new, "detail": detail, "mode": mode}
 
 
 @dataclass
@@ -248,7 +248,7 @@ def _store_fetched(inv: Investigation, f: _Fetched) -> tuple[dict[str, Any], set
         return _finish_run(inv, f.name, "error", f.started, detail=f"{type(e).__name__}: {e}"[:1000]), set()
     detail = "; ".join(f.res.notes) or None
     return _finish_run(inv, f.name, f.status, f.started, fetched=len(f.res.items), new=len(new_ids),
-                       detail=(detail or "") + f" ({time.monotonic() - f.t0:.1f} s)"), new_ids
+                       detail=(detail or "") + f" ({time.monotonic() - f.t0:.1f} s)", mode=f.res.mode), new_ids
 
 
 def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg: dict[str, Any],

@@ -179,6 +179,7 @@ class CollectionRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # socmint.core.status.STATUSES: ok | partial | throttled | no_key | offline | opted_out | error
     status: Mapped[str] = mapped_column(String(30))
+    mode: Mapped[str | None] = mapped_column(String(60), nullable=True)  # e.g. "search (logged in)", "live listen 60 s"
     fetched: Mapped[int] = mapped_column(Integer, default=0)
     new: Mapped[int] = mapped_column(Integer, default=0)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)

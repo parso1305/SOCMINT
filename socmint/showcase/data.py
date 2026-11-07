@@ -71,7 +71,8 @@ def source_status(d: dict[str, Any]) -> list[dict[str, Any]]:
         label = source_label(k)
         status = normalize(r["status"])
         state = f"{r['new']} new" if status == "ok" else status.replace("_", " ")
-        out.append({"source": k, "label": label, "text": f"{label} · {state}", "status": status,
+        how = f"{r['mode']} · " if r.get("mode") else ""  # e.g. "search (logged in)", "live listen 60 s"
+        out.append({"source": k, "label": label, "text": f"{label} · {how}{state}", "status": status,
                     "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
                     "color": STATUS_COLOR[status]})
     return sorted(out, key=lambda c: c["label"].lower())

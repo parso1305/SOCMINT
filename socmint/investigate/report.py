@@ -184,7 +184,7 @@ def summary(ref: int | str) -> dict[str, Any]:
                   for a in s.scalars(select(Alert).where(Alert.module == "market")).all()
                   if (a.evidence or {}).get("investigation_id") == inv.id]
         runs = [{"source": r.source, "status": normalize(r.status), "fetched": r.fetched, "new": r.new, "detail": r.detail,
-                 "started_at": r.started_at, "finished_at": r.finished_at}
+                 "mode": r.mode, "started_at": r.started_at, "finished_at": r.finished_at}
                 for r in s.scalars(select(CollectionRun).where(CollectionRun.investigation_id == inv.id)
                                    .order_by(CollectionRun.id.desc())).all()]
     latest: dict[str, dict[str, Any]] = {}

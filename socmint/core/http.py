@@ -35,9 +35,10 @@ class RobotsDisallowed(RuntimeError):
 class HttpError(RuntimeError):
     """Raised after retries are exhausted or on a non-retryable HTTP status."""
 
-    def __init__(self, message: str, status: int | None = None):
+    def __init__(self, message: str, status: int | None = None, body: bytes = b""):
         super().__init__(message)
         self.status = status
+        self.body = body  # first bytes of the error body (e.g. XRPC {"error": "ExpiredToken"}); never in the message
 
 
 class Throttled(RuntimeError):
@@ -230,7 +231,7 @@ class PoliteClient:
                         self._cache_put(key, r.content, str(r.url), status)
                     return r.content
                 if status not in retryable or attempt >= max_retries:
-                    raise HttpError(f"HTTP {status} for {url}", status)
+                    raise HttpError(f"HTTP {status} for {url}", status, r.content[:500])
                 last_exc = HttpError(f"HTTP {status} for {url}", status)
                 retry_after = r.headers.get("retry-after")
                 if retry_after and retry_after.isdigit():  # only slept when a retry follows

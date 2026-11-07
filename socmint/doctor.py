@@ -46,6 +46,8 @@ KEYS: list[tuple[tuple[str, ...], str | None, str, str]] = [
      "reddit, only for events that list subreddits (`channels: reddit:`)"),
     (("TELEGRAM_API_ID", "TELEGRAM_API_HASH"), "telegram", "channels",
      "telegram, only for events that list public channels (`channels: telegram:`)"),
+    (("BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"), "bluesky", "event",
+     "bluesky searches posts (logged in, a dedicated account + app password) instead of a 60 s live listen"),
     (("TELEGRAM_BOT_TOKEN",), None, "other", "the Telegram tipline bot (not used by events)"),
     (("GOOGLE_SAFE_BROWSING_KEY",), None, "other", "Safe Browsing URL checks in the tipline (not used by events)"),
     (("URLHAUS_AUTH_KEY",), None, "other", "the URLhaus threat feed in `socmint ingest` (not used by events)"),
@@ -90,7 +92,10 @@ def event_sources_check() -> Check:
     for logical in used:
         n = len(resolve_sources(logical))
         if logical == "bluesky":
-            parts.append("bluesky (live listen 60 s; public search is closed)")
+            from socmint.ingest import bluesky_auth
+
+            parts.append("bluesky (search, logged in)" if bluesky_auth.configured()
+                         else "bluesky (live listen 60 s; public search is closed)")
         elif logical == "news_rss":
             parts.append(f"news_rss ({n} feeds)")
         else:

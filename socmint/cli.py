@@ -340,6 +340,7 @@ def inv_collect(ref: str = typer.Argument(..., help="Investigation id or name.")
 
     def progress(name: str, run: dict) -> None:
         typer.echo(f"  {name:<22} {run['status']:<18} fetched={run['fetched']:<5} new={run['new']:<5}"
+                   + (f" [{run['mode']}]" if run.get("mode") else "")
                    + (f" {run['detail'][:150]}" if run.get("detail") else ""))
 
     out = collect(_inv_ref(ref), only_source=source, progress=progress)
