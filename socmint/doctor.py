@@ -12,7 +12,6 @@ import os
 import re
 import shutil
 import socket
-import sqlite3
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -217,7 +216,7 @@ def demo_check(now: datetime | None = None) -> Check:
     path = demo.demo_db_path()
     if not path.exists():
         return Check("demo data", WARN, "data/demo.db does not exist", "build it: `socmint showcase --rebuild`")
-    built = demo_built_at(path)
+    built = demo.demo_built_at(path)
     if built is None:
         return Check("demo data", WARN, "data/demo.db has no showcase investigations",
                      "rebuild it: `socmint showcase --rebuild`")
@@ -228,27 +227,6 @@ def demo_check(now: datetime | None = None) -> Check:
         return Check("demo data", WARN, detail + "; its 'last 24 h' numbers are stale: rebuild before a meeting",
                      "`socmint showcase --rebuild` (about a minute)")
     return Check("demo data", PASS, detail)
-
-
-def demo_built_at(path) -> datetime | None:  # noqa: ANN001
-    """When data/demo.db was built: the creation time of its showcase investigations (read-only open)."""
-    from socmint import scenario
-
-    try:
-        con = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
-        try:
-            row = con.execute("SELECT min(created_at) FROM investigations WHERE name IN (?, ?, ?)",
-                              (scenario.EVENT_NAME, scenario.SUBJECT_NAME, scenario.GROUP_NAME)).fetchone()
-        finally:
-            con.close()
-    except sqlite3.Error:
-        return None
-    if not row or not row[0]:
-        return None
-    try:
-        return datetime.fromisoformat(str(row[0]))
-    except ValueError:
-        return None
 
 
 def uv_check() -> Check:

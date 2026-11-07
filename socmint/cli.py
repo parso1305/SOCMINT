@@ -207,6 +207,8 @@ def showcase(demo_db: bool = typer.Option(False, "--demo", help="Open data/demo.
         ready, why = (False, "--rebuild") if rebuild else demo.demo_db_ready()
         if ready:
             typer.echo("Using existing data/demo.db (run with --rebuild to build it again).")
+            if warning := demo.stale_warning():
+                typer.echo(warning)
             db_url = f"sqlite:///{demo.demo_db_path().as_posix()}"
         else:
             typer.echo(f"Building data/demo.db with synthetic data (offline; {why})…")

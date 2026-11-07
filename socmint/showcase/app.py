@@ -100,7 +100,9 @@ inv = s["investigation"]
 
 # ------------------------------------------------------------------------------------------- header
 if DEMO or inv["synthetic"]:
-    st.warning("DEMO DATA (synthetic): fictional people, channels, domains and numbers. Nothing here is real.")
+    built = data.synthetic_built_at()
+    st.warning("DEMO DATA (synthetic): fictional people, channels, domains and numbers. Nothing here is real."
+               + (f" Synthetic data built {built:%d %b %Y %H:%M} UTC." if built else ""))
 st.title(inv["name"])
 st.caption(f"{inv['kind'].upper()} · purpose: {inv['purpose']}"
            + (f" · last collected {inv['last_collected_at']:%d %b %Y %H:%M} UTC" if inv["last_collected_at"] else ""))

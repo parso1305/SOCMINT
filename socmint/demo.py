@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +174,43 @@ def seed_investigations(now=None) -> dict[str, Any]:
         out["group"] = {"id": gid, "collect": runner.collect(gid, factory=factory, resolver=resolver, who=who)}
         out["group"]["analyze"] = runner.analyze(gid, modules=("coordination",), who=who)
     return out
+
+
+def demo_built_at(path: Path | None = None) -> datetime | None:
+    """When data/demo.db was built: the creation time of its showcase investigations (read-only open)."""
+    from socmint import scenario
+
+    path = path or demo_db_path()
+    try:
+        con = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            row = con.execute("SELECT min(created_at) FROM investigations WHERE name IN (?, ?, ?)",
+                              (scenario.EVENT_NAME, scenario.SUBJECT_NAME, scenario.GROUP_NAME)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    if not row or not row[0]:
+        return None
+    try:
+        return datetime.fromisoformat(str(row[0]))
+    except ValueError:
+        return None
+
+
+def stale_warning(now: datetime | None = None) -> str | None:
+    """A warning when data/demo.db is older than `showcase.demo_max_age_hours` (its "last 24 h" numbers go stale)."""
+    from socmint.core.models import utcnow
+    from socmint.core.settings import threshold
+
+    built = demo_built_at()
+    if built is None:
+        return None
+    age_h = ((now or utcnow()) - built).total_seconds() / 3600
+    if age_h <= float(threshold("showcase.demo_max_age_hours", 12)):
+        return None
+    return (f"WARNING: data/demo.db was built {built:%d %b %Y %H:%M} UTC ({age_h:.0f} h ago), so its 'last 24 h' "
+            "numbers are stale. Rebuild before a meeting: socmint showcase --rebuild")
 
 
 def demo_db_ready() -> tuple[bool, str]:

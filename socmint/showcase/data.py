@@ -39,6 +39,17 @@ def demo_mode() -> bool:
     return "demo.db" in get_settings().db_url
 
 
+def synthetic_built_at() -> Any:
+    """When this DB's synthetic (demo) data was built: the creation time of its first synthetic investigation."""
+    from sqlalchemy import func, select
+
+    from socmint.core.db import session_scope
+    from socmint.core.models import Investigation
+
+    with session_scope() as s:
+        return s.scalar(select(func.min(Investigation.created_at)).where(Investigation.synthetic.is_(True)))
+
+
 def load(inv_id: int) -> dict[str, Any]:
     """Summary + posts + accounts + edges for one investigation."""
     posts = report.posts(inv_id)

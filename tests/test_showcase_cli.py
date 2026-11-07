@@ -70,3 +70,20 @@ def test_showcase_reuses_or_rebuilds(demo_path, monkeypatch):
     r = CliRunner().invoke(cli.app, ["showcase", "--rebuild"])
     assert r.exit_code == 0 and len(builds) == 2
     assert len(launched) == 3 and all("demo.db" in u or u == "sqlite:///x" for u in launched)
+
+
+@pytest.mark.parametrize("hours, warned", [(1, False), (13, True)])
+def test_showcase_demo_warns_when_the_reused_demo_db_is_stale(demo_path, monkeypatch, hours, warned):
+    """M20.4: a demo.db built yesterday shows stale "last 24 h" numbers, so reusing it after 12 h prints a warning."""
+    from datetime import timedelta
+
+    from socmint.core.models import utcnow
+
+    monkeypatch.setattr(demo, "demo_db_ready", lambda: (True, ""))
+    monkeypatch.setattr(demo, "demo_built_at", lambda path=None: utcnow() - timedelta(hours=hours))
+    monkeypatch.setattr(cli.subprocess, "run", lambda *a, **kw: None)
+    r = CliRunner().invoke(cli.app, ["showcase", "--demo"])
+    assert r.exit_code == 0 and "Using existing data/demo.db" in r.output
+    assert ("WARNING" in r.output) is warned
+    if warned:
+        assert "13 h ago" in r.output and "socmint showcase --rebuild" in r.output and "last 24 h" in r.output

@@ -202,3 +202,16 @@ def test_chip_names_a_failed_last_run_and_keeps_the_search_mode():
     assert chips["demo_bluesky"]["text"] == "Bluesky (demo) · live listen 60 s · 5 posts"
     assert chips["demo_mastodon"]["text"] == "Mastodon (demo) · 0 posts · throttled"
     assert chips["demo_bluesky"]["last"] == "last run: ok, 0 new of 3 fetched"
+
+
+def test_demo_banner_says_when_the_synthetic_data_was_built(showcase_db, monkeypatch):
+    """M20.4: the banner dates the synthetic data, so a stale demo.db is visible on screen."""
+    import re
+
+    url, ids = showcase_db
+    _use(url, monkeypatch)
+    at = AppTest.from_file(str(APP), default_timeout=120)
+    at.session_state["inv_id"] = ids["event"]
+    at.run()
+    banner = next(w.value for w in at.warning if w.value.startswith("DEMO DATA"))
+    assert re.search(r"Synthetic data built \d{2} \w{3} \d{4} \d{2}:\d{2} UTC", banner), banner

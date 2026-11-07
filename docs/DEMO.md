@@ -13,7 +13,9 @@ uv run socmint showcase --demo         # in the meeting: reuses data/demo.db and
 ```
 
 `--demo` reuses `data/demo.db` when it exists, has the current schema and holds the three showcase investigations;
-otherwise it builds it first. `--rebuild` always builds it from scratch and prints how long that took. The build runs
+otherwise it builds it first. The demo's "last 24 h" numbers are relative to when it was built, so a reused
+`demo.db` older than 12 h (`showcase.demo_max_age_hours`) makes `--demo` print a warning, `socmint doctor` reports
+its age, and the banner says "Synthetic data built <date time>": rebuild on the morning of the meeting. `--rebuild` always builds it from scratch and prints how long that took. The build runs
 the v0 demo (tipline, scams, narratives, market) and then three investigations through the real collect → categorise
 → analyse → promote pipeline, with fixture sources standing in for the platforms. The main database
 (`data/socmint.db`) is never touched. (`socmint demo` also rebuilds `data/demo.db`, without the investigations, so the
