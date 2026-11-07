@@ -57,6 +57,11 @@ class JetstreamListener:
         if self.thread.is_alive():
             self.thread.join(timeout)
 
+    def set_terms(self, terms_by_lang: dict[str, list[str]]) -> None:
+        """Match these terms from now on (the watch passes the investigation's current terms every cycle, so terms
+        added while it runs are matched too). Posts already received are not matched again."""
+        self.matcher = TermMatcher(terms_by_lang)
+
     def drain(self) -> dict[str, list[str]]:
         with self._lock:
             out, self._queue = self._queue, {}

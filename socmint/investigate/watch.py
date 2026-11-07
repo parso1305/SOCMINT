@@ -124,6 +124,8 @@ def watch(ref: int | str, every_s: int, for_s: int | None = None, analyze: bool 
         while True:
             cycles += 1
             t0 = clock()
+            if listener is not None:  # terms added while watching (suggested terms) reach the open connection too
+                listener.set_terms(runner.config_of(runner.get(inv.id)).terms)
             out = runner.collect(inv.id, factory=fac, resolver=resolver, enrich_after=enrich_after, stop=stop,
                                  who=who)
             total += out["new_posts"]

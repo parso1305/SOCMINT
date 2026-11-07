@@ -256,3 +256,44 @@ def test_watch_cli_refuses_less_than_five_minutes_and_bad_durations():
     assert out.exit_code == 1 and "at least 5 minutes" in out.output
     out = CliRunner().invoke(cli.app, ["investigate", "watch", "watched", "--every", "soon"])
     assert out.exit_code == 1 and "cannot read the duration" in out.output
+
+
+# ------------------------------------------------------------------------------------------- terms added mid-watch
+def test_listener_matches_terms_set_after_it_was_created():
+    fake = FakeConnect([[jet(1000, "r1", "cricket score"), jet(1001, "r2", "Delhi smog")]])
+    lst = JetstreamListener("wss://jet.example/subscribe", TERMS, connect=fake, reconnect_delay_s=0)
+    lst.set_terms({"en": ["cricket"]})
+    lst.start()
+    try:
+        assert wait_for(lambda: lst.scanned >= 2)
+    finally:
+        lst.stop()
+    assert set(lst.drain()) == {"at://did:plc:a/app.bsky.feed.post/r1"}
+
+
+def test_terms_added_during_a_watch_reach_the_jetstream_listener():
+    """DEMO.md recipe step 4: suggested terms added while a watch runs are matched by its open Jetstream connection
+    from the next cycle on (the other sources read the config every cycle anyway)."""
+    Posts.calls, Posts.on_fetch = 0, None
+    iid = event()
+    given: list[dict] = []
+
+    class Listener:
+        def set_terms(self, terms):
+            given.append(terms)
+
+        def stop(self):
+            pass
+
+    clock = Clock()
+
+    def analyst_adds_a_term_then_waits(seconds):
+        runner.edit(iid, add_terms=["#DelhiAirQuality"])
+        return clock.wait(seconds)
+
+    out = watch.watch(iid, every_s=300, for_s=300, echo=lambda s: None, clock=clock.now,
+                      wait=analyst_adds_a_term_then_waits, factory=lambda lg, cfg: Posts(cfg),
+                      resolver=lambda lg: [{"name": "feed", "type": "watch_posts"}], enrich_after=False,
+                      listener_factory=lambda cfg: Listener())
+    assert out["cycles"] == 2
+    assert "#DelhiAirQuality" not in given[0]["en"] and "#DelhiAirQuality" in given[-1]["en"]
