@@ -89,3 +89,13 @@ def test_air_quality_posts_are_labelled_environment(text):
 
     taxonomy.cache_clear()
     assert "environment" in {lab.label for lab in rule_labels(text)}
+
+
+def test_own_term_check_uses_the_word_start_rule():
+    """An event term बंदर (port) does not make the keyword बंद (shutdown) count as the event's own term."""
+    from socmint.analyze.categorize import rule_labels, taxonomy
+
+    taxonomy.cache_clear()
+    text = "मुंबईत आज बंद, सर्व दुकाने बंद"
+    assert "civic_safety" in {lab.label for lab in rule_labels(text, investigation_terms={"mr": ["बंदर"]})}
+    assert "civic_safety" not in {lab.label for lab in rule_labels(text, investigation_terms={"mr": ["बंद"]})}

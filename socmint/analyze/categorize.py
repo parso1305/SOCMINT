@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from socmint.core.logging import get_logger
 from socmint.core.models import ItemLabel, utcnow
 from socmint.core.settings import load_config, threshold
-from socmint.understand.normalize import match_text
+from socmint.understand.normalize import devanagari_word, match_text
 
 log = get_logger(__name__)
 
@@ -99,7 +99,7 @@ def _is_investigation_term(keyword: str, term_keys: list[str]) -> bool:
             return True
         if keyword.isascii() and re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", k):
             return True
-        if not keyword.isascii() and keyword in k:  # Devanagari keywords match as substrings, as in TermMatcher
+        if not keyword.isascii() and devanagari_word(keyword).search(k):  # word-start rule, as in TermMatcher
             return True
     return False
 
