@@ -245,6 +245,12 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     # and `progress` (Streamlit) is only ever called from this thread.
     workers = max(1, int(threshold("investigate.max_parallel_sources", 4)))
     skipped: list[str] = []
+    # Each source's new posts are enriched as soon as they are stored, so enrichment (and the model load) overlaps
+    # the sources still fetching instead of waiting for the slowest one. Posts enriched before a fact-check source
+    # stored its fact-checks are matched again at the end (claim matching must see every fact-check).
+    enriched: dict[str, Any] = {}
+    enriched_ids: list[int] = []
+    rematch: set[int] = set()
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="collect") as pool:
         futures = {pool.submit(_fetch_one, inv, cfg, logical, scfg, factory, since, limit, stop): scfg["name"]
                    for logical, scfg in jobs}
@@ -257,15 +263,21 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
                 skipped.append(fetched.name)
                 continue
             run, ids = _store_fetched(inv, fetched)
+            fresh = sorted(ids - new_ids)
             new_ids |= ids
             report(fetched.name, run)
             if stop is not None and stop.is_set():
                 for f in futures:
                     f.cancel()  # not started yet: never started (a worker that already took one sees `stop`)
+            if enrich_after:
+                if fetched.res is not None and fetched.res.factchecks:
+                    rematch.update(enriched_ids)
+                if fresh:
+                    _add_enriched(enriched, enrich(fresh, event=(cfg.kind == "event"), terms=cfg.terms))
+                    enriched_ids += fresh
+    if rematch:  # labels are replaced; indicators were stored the first time (no second sighting)
+        enrich(sorted(rematch), event=(cfg.kind == "event"), terms=cfg.terms, indicators=False)
     _link_top_authors(inv.id)
-    enriched: dict[str, Any] = {}
-    if enrich_after and new_ids:
-        enriched = enrich(sorted(new_ids), event=(cfg.kind == "event"), terms=cfg.terms)
     with session_scope() as s:
         row = s.get(Investigation, inv.id)
         row.last_collected_at = utcnow()
@@ -445,12 +457,24 @@ def _link_top_authors(inv_id: int) -> None:
 
 
 # ------------------------------------------------------------------------------------------- enrich
-def enrich(item_ids: list[int], event: bool = True, terms: dict[str, list[str]] | None = None) -> dict[str, Any]:
+def _add_enriched(total: dict[str, Any], part: dict[str, Any]) -> None:
+    """Merge one `enrich` result into the collect's running total."""
+    total["posts"] = total.get("posts", 0) + part.get("posts", 0)
+    total["indicators"] = total.get("indicators", 0) + part.get("indicators", 0)
+    labels = Counter(total.get("labels", {}))
+    labels.update(part.get("labels", {}))
+    total["labels"] = dict(labels)
+    total["degraded"] = list(dict.fromkeys(total.get("degraded", []) + part.get("degraded", [])))
+
+
+def enrich(item_ids: list[int], event: bool = True, terms: dict[str, list[str]] | None = None,
+           indicators: bool = True) -> dict[str, Any]:
     """Language, entities, scam/impersonation signals, claim matching (events) and categories for posts.
 
     Scam artifacts become `indicators` exactly as in the tipline: only for likely/suspicious posts, never linked
     to a submission or sender. Zero-shot categories are added when enabled and available (else `degraded`).
     `terms` (the investigation's keywords) never count toward a category: every collected post contains them.
+    `indicators=False` re-enriches without storing indicators again (they were stored, and counted, the first time).
     """
     from socmint.analyze import categorize as cz
     from socmint.understand.lang import detect_lang
@@ -472,7 +496,7 @@ def enrich(item_ids: list[int], event: bool = True, terms: dict[str, list[str]] 
                 it.meta = {**(it.meta or {}), "entities": ents,
                            "signals": {"scam_score": sig.scam_score, "scam_band": sig.scam_band,
                                        "factchecks": sig.factchecks, "impersonation": sig.impersonation[:6]}}
-                inds = _indicators(it, ent, sig)
+                inds = _indicators(it, ent, sig) if indicators else []
                 if inds:
                     out["indicators"] += store_indicators(s, inds)
                 texts[it.id] = it.text or ""

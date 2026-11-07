@@ -125,3 +125,68 @@ def test_robots_txt_is_fetched_once_per_host_under_concurrency(online):
     for t in threads:
         t.join()
     assert counter.get("/robots.txt") == 1
+
+
+# ------------------------------------------------------------------------------------------- progressive enrich
+class Gate(Source):
+    """`fast` returns a post at once; `slow` waits (up to 5 s) for the fast post to be enriched, then returns its own.
+    `fc` returns a fact-check instead of a post."""
+
+    type_name = "fake_gate"
+    capabilities = {"terms"}
+    enriched = threading.Event()
+    overlapped: list[bool] = []
+
+    def fetch(self, since):
+        return FetchResult()
+
+    def search_terms(self, terms_by_lang, since, limit):
+        from datetime import datetime
+
+        from socmint.core.schemas import FactCheckIn
+
+        if self.name == "slow":
+            Gate.overlapped.append(Gate.enriched.wait(5))
+        if self.name == "fc":
+            Gate.overlapped.append(Gate.enriched.wait(5))
+            return FetchResult(factchecks=[FactCheckIn(publisher="Demo Check", title="Pune flood claim is false",
+                                                       url="https://check.example/1", lang="en",
+                                                       published_at=datetime(2026, 11, 1))])
+        return FetchResult(items=[ItemIn(source=self.name, source_type="news", external_id=f"{self.name}-1",
+                                         url=f"https://{self.name}.example/1", text=f"Pune flood update {self.name}")])
+
+
+def gate_collect(names: list[str], monkeypatch) -> tuple[dict[str, Any], list[list[int]]]:
+    Gate.enriched, Gate.overlapped = threading.Event(), []
+    calls: list[list[int]] = []
+    real = runner.enrich
+
+    def spy(ids, **kw):
+        calls.append(list(ids))
+        out = real(ids, **kw)
+        Gate.enriched.set()
+        return out
+
+    monkeypatch.setattr(runner, "enrich", spy)
+    iid = runner.create(InvestigationConfig(kind="event", name="progressive", purpose="test",
+                                            terms={"en": ["Pune flood"]}, sources=["news_rss"]))
+    out = runner.collect(iid, factory=lambda logical, cfg: Gate(cfg),
+                         resolver=lambda logical: [{"name": n, "type": "fake_gate"} for n in names])
+    return out, calls
+
+
+def test_posts_are_enriched_while_slower_sources_still_fetch(monkeypatch):
+    """The first source's posts (and the model load) are enriched while a slower source is still fetching."""
+    out, calls = gate_collect(["fast", "slow"], monkeypatch)
+    assert Gate.overlapped == [True]
+    assert len(calls) == 2 and sorted(sum(calls, [])) == sorted(set(sum(calls, [])))  # each post enriched once
+    assert out["new_posts"] == 2 and out["enrich"]["posts"] == 2
+    assert out["enrich"]["labels"]
+
+
+def test_posts_enriched_before_a_late_fact_check_are_matched_again(monkeypatch):
+    """Claim matching must see fact-checks stored later in the same collect: earlier posts are enriched again."""
+    out, calls = gate_collect(["fast", "fc"], monkeypatch)
+    assert Gate.overlapped == [True]
+    assert len(calls) == 2 and calls[0] == calls[1]  # the fast post, then again after the fact-check arrived
+    assert out["enrich"]["posts"] == 1
