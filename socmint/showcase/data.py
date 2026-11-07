@@ -13,12 +13,13 @@ from typing import Any
 import pandas as pd
 
 from socmint.core.settings import get_settings
+from socmint.core.status import normalize
 from socmint.investigate import report, runner
 from socmint.investigate.config import NO_KEY_SOURCES, InvestigationConfig, parse_handles
 
 KINDS = {"Event": "event", "Person / Account": "subject", "Group": "group"}
-STATUS_COLOR = {"ok": "green", "offline": "gray", "missing_key": "orange", "unsupported": "gray",
-                "blocked_by_robots": "orange", "error": "red"}
+STATUS_COLOR = {"ok": "green", "partial": "orange", "throttled": "violet", "no_key": "gray", "offline": "gray",
+                "opted_out": "blue", "error": "red"}  # one colour per socmint.core.status word
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 # Posts table: pixel widths that fit the main area at 1366 px with the sidebar open (no horizontal scrolling).
 POSTS_COLUMN_WIDTHS = {"time (UTC)": 95, "platform": 75, "author": 135, "text": 330, "categories": 150, "lang": 45,
@@ -68,10 +69,11 @@ def source_status(d: dict[str, Any]) -> list[dict[str, Any]]:
     out = []
     for k, r in d["summary"]["collection"]["latest_by_source"].items():
         label = source_label(k)
-        state = f"{r['new']} new" if r["status"] == "ok" else r["status"].replace("_", " ")
-        out.append({"source": k, "label": label, "text": f"{label} · {state}", "status": r["status"],
+        status = normalize(r["status"])
+        state = f"{r['new']} new" if status == "ok" else status.replace("_", " ")
+        out.append({"source": k, "label": label, "text": f"{label} · {state}", "status": status,
                     "fetched": r["fetched"], "new": r["new"], "detail": r["detail"] or "",
-                    "color": STATUS_COLOR.get(r["status"], "gray")})
+                    "color": STATUS_COLOR[status]})
     return sorted(out, key=lambda c: c["label"].lower())
 
 

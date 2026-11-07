@@ -23,7 +23,8 @@ with session_scope() as s:
     rows = [{"source": r.name, "type": r.type, "enabled": r.enabled, "status": r.status, "last_run": r.last_run,
              "last_count": r.last_count, "last error / reason": (r.last_error or "")[:200],
              "notes": cfg.get(r.name, {}).get("notes", "")} for r in s.scalars(select(SourceRow).order_by(SourceRow.name))]
-st.caption("Statuses: ok · error · disabled (config) · missing_key (add the key to .env) · blocked_by_robots · offline. "
+st.caption("Statuses: ok · partial · throttled (the source is limiting this IP) · no_key (add the key named in the "
+           "reason to .env) · offline · error (including robots.txt disallows) · disabled (config). "
            "See SOURCES.md for access terms.")
 show_table(rows, "No sources registered. Run `socmint init-db`.")
 

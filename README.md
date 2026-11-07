@@ -121,7 +121,12 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | https://www.reddit.com/prefs/apps → *create app* → type **script**. Non-commercial use under Reddit's Data API terms. |
 | `URLHAUS_AUTH_KEY` | https://auth.abuse.ch → sign in → create an Auth-Key (free, fair use). |
 
-A source whose key is missing is reported as `missing_key` and skipped. Nothing crashes.
+A source whose key is missing is reported as `no_key` (the detail names the `.env` variable) and skipped. Nothing crashes.
+
+Every collection reports one of seven statuses, the same in the CLI, the showcase chips, the collection log and
+`collection_runs.status`: `ok`, `partial` (some but not all, e.g. a quota ran out or some subject accounts opted out),
+`throttled` (the source is limiting this IP; GDELT then cools down for 15 min and sends nothing), `no_key`, `offline`,
+`opted_out` (every requested account opted out) and `error` (anything else, including robots.txt disallows).
 
 ## Configuration
 - `config/sources.yaml`: every source (URL, enabled, rate limit, notes). Verified URLs are listed in `SOURCES.md`.

@@ -91,7 +91,7 @@ What to expect live (as of 2026-11-06):
 | Bluesky | Public search is closed (HTTP 403), so the source listens to the Jetstream firehose for 60 s and only finds posts made in that minute. Often 0 for specific terms. | Works |
 | News RSS | Configured Indian feeds, filtered by keyword | n/a |
 | GDELT | One query; currently fails cleanly with HTTP 429 on throttled IPs | n/a |
-| YouTube / Reddit / Telegram | Need keys in `.env`; otherwise `missing_key` | Need keys |
+| YouTube / Reddit / Telegram | Need keys in `.env`; otherwise `no_key` | Need keys |
 
 A collect takes from about 20 s (subject) to 1–2 minutes (event, mostly the Bluesky listen). Then run *analyze*
 (CLI), or simply reopen the investigation in the showcase.

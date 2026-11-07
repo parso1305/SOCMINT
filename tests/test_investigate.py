@@ -119,7 +119,7 @@ def test_collect_isolates_sources_links_matches_and_enriches():
     iid = runner.create(event_cfg())
     out = runner.collect(iid, factory=factory)
     status = {r["source"]: r["status"] for r in out["runs"]}
-    assert status == {"bluesky": "ok", "mastodon": "missing_key", "news_rss": "error", "gdelt": "offline"}
+    assert status == {"bluesky": "ok", "mastodon": "no_key", "news_rss": "error", "gdelt": "offline"}
     assert out["new_posts"] == 11
     with session_scope() as s:
         links = {s.get(Item, r.item_id).external_id: r.matched_by

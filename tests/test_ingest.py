@@ -133,7 +133,7 @@ def test_runner_isolates_failures(monkeypatch):
         setattr(self, "cfg", cfg), setattr(self, "name", cfg["name"]), setattr(self, "client", fake))[0])
 
     out = {r["source"]: r["status"] for r in runner.run_sources("all")}
-    assert out == {"good": "ok", "boom": "error", "robots": "blocked_by_robots", "keyed": "missing_key", "off": "disabled"}
+    assert out == {"good": "ok", "boom": "error", "robots": "error", "keyed": "no_key", "off": "disabled"}
     with session_scope() as s:
         assert s.scalar(select(func.count(FactCheck.id))) == 2
         assert s.scalar(select(SourceRow.last_error).where(SourceRow.name == "boom")).startswith("ValueError")

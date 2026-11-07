@@ -177,7 +177,7 @@ class CollectionRun(Base):
     source: Mapped[str] = mapped_column(String(100))
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # ok | missing_key | error | blocked_by_robots | offline | unsupported
+    # socmint.core.status.STATUSES: ok | partial | throttled | no_key | offline | opted_out | error
     status: Mapped[str] = mapped_column(String(30))
     fetched: Mapped[int] = mapped_column(Integer, default=0)
     new: Mapped[int] = mapped_column(Integer, default=0)

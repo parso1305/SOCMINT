@@ -57,7 +57,7 @@ class Source(ABC):
         s = get_settings()
         missing = [k.upper() for k in self.required_settings if not getattr(s, k, "")]
         if missing:
-            return False, f"missing key(s) in .env: {', '.join(missing)}"
+            return False, f"set {' and '.join(missing)} in .env to enable this source"
         return True, ""
 
     @abstractmethod

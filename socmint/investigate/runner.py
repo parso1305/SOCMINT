@@ -186,11 +186,11 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
     jobs: list[tuple[str, dict[str, Any]]] = []
     for logical in sources:
         if logical not in LOGICAL_SOURCES:
-            report(logical, _finish_run(inv, logical, "unsupported", detail=f"unknown source {logical!r}"))
+            report(logical, _finish_run(inv, logical, "error", detail=f"unknown source {logical!r}"))
             continue
         cfgs = resolve(logical)
         if not cfgs:
-            report(logical, _finish_run(inv, logical, "unsupported",
+            report(logical, _finish_run(inv, logical, "error",
                                         detail="no enabled source of this kind in config/sources.yaml"))
         jobs += [(logical, scfg) for scfg in cfgs]
     # Fetch in parallel (network only); store sequentially here, in completion order, so SQLite sees one writer
@@ -273,7 +273,7 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
         src = factory(logical, scfg)
         ok, why = src.availability()
         if not ok:
-            return fail("missing_key", why)
+            return fail("no_key", why)
         res = FetchResult()
         matched: dict[tuple[str, str], dict[str, Any]] = {}
         account_links: list[tuple[str, str, str]] = []  # (account key, role, added_by)
@@ -300,11 +300,13 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
                 raise UnsupportedCapability(f"{name} cannot collect accounts")
             role = "subject" if cfg.kind == "subject" else "member"
             added_by = "coordination" if cfg.promoted_from else "analyst"
+            opted = 0
             for h in handles:
                 try:
                     part = src.account_posts(h, since, limit)
                 except OptedOut as e:
                     res.notes.append(f"skipped {h}: {e}")
+                    opted += 1
                     continue
                 prof = part.accounts[0] if part.accounts else src.account_profile(h)
                 if not part.accounts:
@@ -313,6 +315,10 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
                 for it in part.items:
                     matched[(it.source, it.external_id)] = {"source": name, "handle": h}
                 res.extend(part)
+            if opted:  # opt-outs are respected: all of them -> opted_out, some of them -> partial
+                out.status = "opted_out" if opted == len(handles) else "partial"
+        if res.partial and out.status == "ok":
+            out.status = "partial"
         res.items = [it for it in res.items if _window_ok(it.published_at, cfg)]
         for it in res.items:
             it.meta.setdefault("collected_for", inv.id)  # kept only on rows this collection creates
@@ -320,9 +326,9 @@ def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg:
         out.res, out.matched, out.account_links = res, matched, account_links
         return out
     except UnsupportedCapability as e:
-        return fail("unsupported", str(e))
+        return fail("error", f"unsupported: {e}")
     except RobotsDisallowed as e:
-        return fail("blocked_by_robots", str(e))
+        return fail("error", str(e))
     except OfflineError as e:
         return fail("offline", str(e))
     except Throttled as e:

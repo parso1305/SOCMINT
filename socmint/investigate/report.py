@@ -32,6 +32,7 @@ from socmint.core.models import (
 )
 from socmint.core.schemas import account_key
 from socmint.core.settings import get_settings
+from socmint.core.status import normalize
 from socmint.investigate.runner import actor, config_of, get
 from socmint.understand.urls import host_of
 
@@ -182,7 +183,7 @@ def summary(ref: int | str) -> dict[str, Any]:
                    "disclaimer": a.evidence.get("disclaimer"), "risk_factors": a.evidence.get("risk_factors")}
                   for a in s.scalars(select(Alert).where(Alert.module == "market")).all()
                   if (a.evidence or {}).get("investigation_id") == inv.id]
-        runs = [{"source": r.source, "status": r.status, "fetched": r.fetched, "new": r.new, "detail": r.detail,
+        runs = [{"source": r.source, "status": normalize(r.status), "fetched": r.fetched, "new": r.new, "detail": r.detail,
                  "started_at": r.started_at, "finished_at": r.finished_at}
                 for r in s.scalars(select(CollectionRun).where(CollectionRun.investigation_id == inv.id)
                                    .order_by(CollectionRun.id.desc())).all()]

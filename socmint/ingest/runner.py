@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from socmint.core.db import session_scope
-from socmint.core.http import OfflineError, RobotsDisallowed
+from socmint.core.http import OfflineError, RobotsDisallowed, Throttled
 from socmint.core.logging import get_logger
 from socmint.core.models import SourceRow, utcnow
 from socmint.ingest.base import source_class
@@ -59,8 +59,8 @@ def run_one(cfg: dict[str, Any], forced: bool = False) -> dict[str, Any]:
         ok, why = False, f"init failed: {e}"
     if not ok:
         log.warning("source_unavailable", extra={"source": name, "reason": why})
-        summary.update(status="missing_key", detail=why)
-        _update_row(name, status="missing_key", last_error=why)
+        summary.update(status="no_key", detail=why)
+        _update_row(name, status="no_key", last_error=why)
         return summary
 
     with session_scope() as s:
@@ -76,12 +76,16 @@ def run_one(cfg: dict[str, Any], forced: bool = False) -> dict[str, Any]:
         _update_row(name, status="ok", last_run=utcnow(), last_error=None, last_count=res.count())
         log.info("source_ok", extra={"source": name, "fetched": res.count(), "new": counts})
     except RobotsDisallowed as e:
-        summary.update(status="blocked_by_robots", detail=str(e))
-        _update_row(name, status="blocked_by_robots", last_error=str(e), last_run=utcnow())
+        summary.update(status="error", detail=str(e))
+        _update_row(name, status="error", last_error=str(e), last_run=utcnow())
         log.warning("source_blocked_by_robots", extra={"source": name, "error": str(e)})
     except OfflineError as e:
         summary.update(status="offline", detail=str(e))
         _update_row(name, status="offline", last_error=str(e))
+    except Throttled as e:
+        summary.update(status="throttled", detail=str(e))
+        _update_row(name, status="throttled", last_error=str(e))
+        log.warning("source_throttled", extra={"source": name, "error": str(e)})
     except Exception as e:  # noqa: BLE001  (per-source isolation is the whole point)
         detail = f"{type(e).__name__}: {e}"[:1000]
         summary.update(status="error", detail=detail)

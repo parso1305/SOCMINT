@@ -104,6 +104,7 @@ class YouTubeSource(Source):
             if budget < 100:
                 log.warning("youtube_quota_budget_reached", extra={"source": self.name})
                 res.notes.append("per-run quota budget reached; remaining keywords skipped")
+                res.partial = True
                 break
             params = {"part": "snippet", "q": kw, "type": "video", "regionCode": self.cfg.get("region", "IN"),
                       "maxResults": max_results, "publishedAfter": after, "order": "date"}

@@ -123,6 +123,7 @@ class FetchResult(BaseModel):
     symbols: list[dict[str, Any]] = Field(default_factory=list)
     accounts: list[AccountIn] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)  # human-readable run notes (fallbacks, opt-out skips)
+    partial: bool = False  # something was fetched but not everything (quota reached, a page failed); see notes
 
     def count(self) -> int:
         return sum(len(x) for x in (self.items, self.factchecks, self.indicators, self.domains, self.market, self.symbols))
@@ -130,7 +131,10 @@ class FetchResult(BaseModel):
     def extend(self, other: FetchResult) -> FetchResult:
         """Append every list of `other` (used when a source runs several queries)."""
         for f in type(self).model_fields:
-            getattr(self, f).extend(getattr(other, f))
+            if f == "partial":
+                self.partial = self.partial or other.partial
+            else:
+                getattr(self, f).extend(getattr(other, f))
         return self
 
 
