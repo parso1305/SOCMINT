@@ -92,17 +92,18 @@ uv run socmint investigate create --kind subject --name "Platform accounts" --pu
 uv run socmint investigate collect "Platform accounts"
 ```
 
-What to expect live (as of 2026-11-06):
+What to expect live without keys (as of 2026-11-07):
 
 | Source | Event (keywords) | Subject (accounts) |
 |---|---|---|
 | Mastodon | Hashtag timelines on mastodon.social. Accounts that opted out of indexing are skipped (often more than half). | Works |
-| Bluesky | Public search is closed (HTTP 403), so the source listens to the Jetstream firehose for 60 s and only finds posts made in that minute. Often 0 for specific terms. | Works |
+| Bluesky | Public search is closed (HTTP 403), so the source listens to the Jetstream firehose for 60 s and only finds posts made in that minute (often 0 for specific terms). A watch keeps one connection open instead; with `BLUESKY_HANDLE` + `BLUESKY_APP_PASSWORD` it searches. | Works |
 | News RSS | Configured Indian feeds, filtered by keyword | n/a |
-| GDELT | One query; currently fails cleanly with HTTP 429 on throttled IPs | n/a |
+| GDELT | One query (26 Delhi air-quality articles on 2026-11-07). Still answers HTTP 429 at times: it then shows `throttled` with the next-try time (15-minute cooldown). A repeat collect within 30 min is served from the cache | n/a |
 | YouTube / Reddit / Telegram | Need keys in `.env`; otherwise `no_key` | Need keys |
 
-A collect takes from about 20 s (subject) to 1–2 minutes (event, mostly the Bluesky listen). Then run *analyze*
+A collect takes from about 15 s (subject) to just over a minute (event: sources run in parallel, so the 60 s
+Bluesky listen sets the pace). Then run *analyze*
 (CLI), or simply reopen the investigation in the showcase.
 
 ### Start a watch the day before the meeting
@@ -151,6 +152,7 @@ database so `data/socmint.db` stays as it is:
 4. **Add suggested terms** after a few cycles: `investigate show "delhi-air"` lists hashtags, names and Hindi/Marathi
    words that 3+ posts from 2+ accounts use, with the `investigate edit` command to add one. In the showcase:
    *Overview* → *Suggested terms* → **Add selected**. Nothing is added automatically, and every edit is audited.
+   The next collect (or watch cycle) searches the added terms over the whole window, not only since the last collect.
 5. **Open the showcase** on the same database (a second terminal, with the same `$env:SOCMINT_DB_URL`):
    ```powershell
    .venv\Scripts\socmint.exe showcase      # http://127.0.0.1:8502

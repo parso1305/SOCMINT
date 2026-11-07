@@ -84,6 +84,16 @@ back) and **no retries** (`event_retries: 0`), so a 429 fails that source in sec
 Re-checked during verification the same day (three event collections): HTTP 429 twice and one "server disconnected";
 each time the source failed cleanly in seconds.
 
+**Throttling and cooldown (M17.2, 2026-11-07):** 10 s connect / 30 s read timeouts, one retry after a network error,
+never a retry after HTTP 429. A 429, or GDELT's plain-text "Please limit requests" answer (sent with HTTP 200), starts a
+15-minute cooldown (`data/cache/cooldowns.json`); during it GDELT is reported as `throttled` with the next-try time and
+no request is sent. The event query starts at the investigation's window start floored to the hour, so a second
+collect within 30 minutes (`cache_ttl_s: 1800`) is answered from the HTTP cache. Live on 2026-11-07 GDELT answered
+again: 26 articles for the Delhi air-quality terms in 21 s, then served from the cache (0.0 s) on the next collect.
+About 40 minutes later a collect with different terms got HTTP 429: GDELT was reported as `throttled` with
+"next try after 09:22 UTC", and the following collect sent no request to GDELT until then. At 09:22 it answered
+again (200 articles in 26 s).
+
 `https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json` with four India keyword queries
 (see sources.yaml). Stores article title, URL, domain and language only. GDELT asks for **≤1 request
 per 5 s** and penalises bursts per IP. The query format was verified live (HTTP 200), but our first run
