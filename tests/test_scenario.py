@@ -64,6 +64,9 @@ def test_seed_investigations_end_to_end():
     assert len(starts) == 20 and all(b - a == timedelta(hours=6) for a, b in zip(starts, starts[1:], strict=False))
     assert {r["source"] for r in hist} == set(ev["by_source"]) and all(r["status"] == "ok" for r in hist)
     assert sum(r["new"] for r in hist) <= ev["counts"]["posts"]
+    # the real collect is the latest run per source and heads the log (runs are ordered by time, not insert order)
+    assert not any("backdated" in (r["detail"] or "") for r in ev["collection"]["latest_by_source"].values())
+    assert "backdated" not in (ev["collection"]["runs"][0]["detail"] or "")
     assert ev["history_hours"] >= 119 and ev["baseline_hours"] == 72
     assert "held back" not in (out["event"]["analyze"]["modules"]["narratives"]["result"].get("note") or "")
     assert any(f.startswith("Fastest-growing narrative") for f in key_findings({"summary": ev}))

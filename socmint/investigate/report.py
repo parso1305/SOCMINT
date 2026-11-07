@@ -187,7 +187,7 @@ def summary(ref: int | str) -> dict[str, Any]:
         runs = [{"source": r.source, "status": normalize(r.status), "fetched": r.fetched, "new": r.new, "detail": r.detail,
                  "mode": r.mode, "started_at": r.started_at, "finished_at": r.finished_at}
                 for r in s.scalars(select(CollectionRun).where(CollectionRun.investigation_id == inv.id)
-                                   .order_by(CollectionRun.id.desc())).all()]
+                                   .order_by(CollectionRun.started_at.desc(), CollectionRun.id.desc())).all()]
     latest: dict[str, dict[str, Any]] = {}
     for r in runs:  # newest first: the latest status per source
         latest.setdefault(r["source"], r)
