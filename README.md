@@ -76,7 +76,8 @@ uv run socmint purge                # apply media retention (run daily, e.g. via
 Investigations (live, no keys needed for the default sources):
 ```bash
 uv run socmint investigate create --kind event --name "test" --terms "flood,बाढ़" --purpose "demo"
-uv run socmint investigate collect "test"           # Bluesky, Mastodon, news RSS, GDELT; failing sources are reported
+uv run socmint investigate collect "test"           # Bluesky, Mastodon, news RSS, GDELT (+ YouTube / Fact Check with keys)
+uv run socmint investigate edit "test" --add-terms "पूर, धरण" --lang mr --add-source youtube   # audited before/after
 uv run socmint investigate analyze "test"           # narratives, possible coordination, market risk (scoped)
 uv run socmint investigate show "test"              # summary (--json for everything)
 uv run socmint investigate export "test" --format csv   # data/exports/... with a SHA-256 manifest
@@ -105,7 +106,7 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `socmint bot` / `api` / `dashboard` | Interfaces (all bind to localhost) |
 | `socmint purge` | Delete raw media older than `RETENTION_DAYS` |
 | `socmint demo` | Offline synthetic end-to-end demo |
-| `socmint investigate create\|list\|collect\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
+| `socmint investigate create\|list\|edit\|collect\|analyze\|show\|export\|promote-group\|delete` | Investigations (event / subject / group) |
 | `socmint showcase [--demo] [--rebuild]` | One-page showcase dashboard on 127.0.0.1:8502 (`--demo` opens data/demo.db, building it offline if needed; `--rebuild` forces a build) |
 | `socmint telegram-login` | One-time Telethon login for reading public channels |
 
@@ -120,8 +121,12 @@ curl -H "X-API-Key: <SOCMINT_API_KEY from .env>" http://127.0.0.1:8000/alerts
 | `GOOGLE_SAFE_BROWSING_KEY` | Same console → enable **Safe Browsing API** → API key (non-commercial use). |
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | https://www.reddit.com/prefs/apps → *create app* → type **script**. Non-commercial use under Reddit's Data API terms. |
 | `URLHAUS_AUTH_KEY` | https://auth.abuse.ch → sign in → create an Auth-Key (free, fair use). |
+| `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | A **dedicated project account** (never a personal one) → bsky.app *Settings → Privacy and security → App passwords* → create one **without DM access**. Enables logged-in post search instead of a 60 s live listen. |
 
 A source whose key is missing is reported as `no_key` (the detail names the `.env` variable) and skipped. Nothing crashes.
+A new event uses the no-key sources plus `youtube` when `YOUTUBE_API_KEY` is set and `google_factcheck` when
+`GOOGLE_FACTCHECK_API_KEY` is set; `investigate create` lists each source and why any is skipped. Reddit and Telegram
+only join an event that lists subreddits / public channels under `channels:` (and names the source).
 
 Every collection reports one of seven statuses, the same in the CLI, the showcase chips, the collection log and
 `collection_runs.status`: `ok`, `partial` (some but not all, e.g. a quota ran out or some subject accounts opted out),
@@ -176,7 +181,9 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
   An analyst may now open a *subject* or *group* investigation on named public accounts, under these guardrails:
   - a subject is created only by an explicit analyst action and needs a **required `purpose`**, stored with it;
   - only what each platform's **official API returns publicly** is collected: public posts and public profile
-    fields. Never private/protected content, contact lists, followers' identities, DMs or anything behind a login;
+    fields. Never private/protected content, contact lists, followers' identities, DMs or anything only a logged-in
+    account can see (the optional Bluesky login is used for public post search only, and opted-out authors are still
+    dropped);
   - **no automatic identity resolution** across platforms: accounts are keyed `platform:platform_id` and are never
     merged;
   - platform **opt-outs are respected**: Mastodon accounts with `noindex: true` or `indexable: false` and Bluesky
@@ -213,9 +220,11 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
   registrations (shown as low severity).
 - "Seen before" is a linear pHash scan (fine up to about 100k images). There is no deepfake detection.
 - Single-user local tool: no auth beyond the API key, SQLite only. The showcase has no login: keep it on localhost.
-- **Bluesky keyword search**: the public AppView's `searchPosts` returns HTTP 403 without auth, so event search
-  falls back to listening to the public Jetstream firehose for up to 60 s and matching terms locally. It only
-  finds posts made *during* that window, so rare terms often return nothing. Account (subject) collection works.
+- **Bluesky keyword search**: the public AppView's `searchPosts` returns HTTP 403 without auth, so without
+  `BLUESKY_HANDLE` / `BLUESKY_APP_PASSWORD` event search falls back to listening to the public Jetstream firehose for
+  up to 60 s and matching terms locally. It only finds posts made *during* that window, so rare terms often return
+  nothing. With the two keys it searches through Bluesky's documented logged-in route (see SOURCES.md). Account
+  (subject) collection works either way.
 - **Mastodon events** use hashtag timelines only (full-text search needs an authenticated account), and many
   accounts are skipped because they opted out of indexing.
 - Telegram, Reddit and YouTube collection needs keys and has been tested only against recorded fixtures.

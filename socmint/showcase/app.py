@@ -10,7 +10,6 @@ import streamlit as st
 
 from socmint.core.db import init_db
 from socmint.investigate import report, runner
-from socmint.investigate.config import LOGICAL_SOURCES
 from socmint.showcase import data
 
 st.set_page_config(page_title="SOCMINT-India showcase", layout="wide")
@@ -27,15 +26,17 @@ with st.sidebar.expander("New investigation", expanded=False):
         name = st.text_input("Name")
         purpose = st.text_area("Purpose (required)", help="Why is this being monitored? Stored and audited.")
         targets = st.text_area("Keywords (event) or platform:handle lines (person/account, group)",
-                               placeholder="flood, बाढ़, #PuneRains\n— or —\nbluesky:example.bsky.social\n"
+                               placeholder="Pune flood, #PuneRains\n— or —\nbluesky:example.bsky.social\n"
                                            "mastodon:@user@mastodon.social")
-        sources = st.multiselect("Sources", sorted(LOGICAL_SOURCES), default=data.default_sources(),
-                                 help="Default: sources that need no API key. Key-gated sources fail cleanly "
-                                      "without keys.")
+        hi_terms = st.text_input("Hindi terms (event, comma-separated)", placeholder="पुणे बाढ़, बांध टूटा")
+        mr_terms = st.text_input("Marathi terms (event, comma-separated)", placeholder="पुणे पूर, धरण फुटले")
+        st.caption("Sources (greyed out: add the named key to .env first)")
+        sources = [o["source"] for o in data.source_options()
+                   if st.checkbox(o["label"], value=o["default"], disabled=not o["available"], key=f"src_{o['source']}")]
         submitted = st.form_submit_button("Create and collect now")
     if submitted:
         try:
-            cfg = data.build_config(kind_label, name, purpose, targets, sources)
+            cfg = data.build_config(kind_label, name, purpose, targets, sources, hi_terms=hi_terms, mr_terms=mr_terms)
         except Exception as e:  # noqa: BLE001  (validation message shown to the analyst)
             st.error(str(e).split("\n[")[0])
         else:
@@ -62,6 +63,33 @@ current = st.session_state.get("inv_id")
 inv_id = st.sidebar.selectbox("Investigation", ids, index=ids.index(current) if current in ids else 0,
                               format_func=labels.get)
 st.session_state["inv_id"] = inv_id
+
+with st.sidebar.expander("Edit this investigation", expanded=False):
+    now = runner.config_of(runner.get(inv_id))
+    opts = {o["source"]: o["label"] for o in data.source_options()}
+    with st.form("edit_inv"):
+        add_terms: list[str] = []
+        rm_terms: list[str] = []
+        add_lang = "en"
+        if now.kind == "event":
+            add_terms = data.split_terms(st.text_input("Add terms (comma-separated)"))
+            add_lang = st.selectbox("Language of the added terms", ["en", "hi", "mr", "hinglish"])
+            rm_terms = st.multiselect("Remove terms", [t for v in now.terms.values() for t in v])
+        new_sources = st.multiselect("Sources", list(dict.fromkeys([*opts, *now.sources])), default=now.sources,
+                                     format_func=lambda s: opts.get(s, s))
+        new_purpose = st.text_area("Purpose", value=now.purpose)
+        save = st.form_submit_button("Save changes")
+    if save:
+        try:
+            change = runner.edit(inv_id, add_terms=add_terms, remove_terms=rm_terms, lang=add_lang,
+                                 add_sources=[s for s in new_sources if s not in now.sources],
+                                 remove_sources=[s for s in now.sources if s not in new_sources],
+                                 purpose=new_purpose if new_purpose.strip() != now.purpose else None)
+        except ValueError as e:
+            st.error(f"Not changed: {e}")
+        else:
+            st.success("Saved (audited): " + ", ".join(change["after"]) + " changed. Collect again to use them.")
+
 if st.session_state.get("_viewed") != inv_id:  # audit each investigation once per selection
     runner.record_view(inv_id, "showcase")
     st.session_state["_viewed"] = inv_id

@@ -17,7 +17,9 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SOCMINT_API_KEY", "test-key")
     monkeypatch.setenv("EMBEDDING_BACKEND", monkeypatch_backend())
     monkeypatch.setenv("SOCMINT_OFFLINE", "1")
-    for key in ("TELEGRAM_BOT_TOKEN", "YOUTUBE_API_KEY", "GOOGLE_FACTCHECK_API_KEY", "REDDIT_CLIENT_ID"):
+    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "YOUTUBE_API_KEY",
+                "GOOGLE_FACTCHECK_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "GOOGLE_SAFE_BROWSING_KEY",
+                "URLHAUS_AUTH_KEY", "BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"):
         monkeypatch.setenv(key, "")
     reset_settings()
     db.get_engine.cache_clear()

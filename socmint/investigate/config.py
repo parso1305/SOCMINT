@@ -18,11 +18,23 @@ NO_KEY_SOURCES = ["bluesky", "mastodon", "news_rss", "gdelt"]
 KEY_GATED: dict[str, tuple[str, ...]] = {
     "youtube": ("youtube_api_key",), "google_factcheck": ("google_factcheck_api_key",),
     "reddit": ("reddit_client_id", "reddit_client_secret"), "telegram": ("telegram_api_id", "telegram_api_hash")}
+# key-gated sources that join every new event as soon as their key is in .env
+EVENT_KEY_SOURCES = ["youtube", "google_factcheck"]
+# sources that only search inside lists the analyst approves (`channels:`), so they never join an event by themselves
+CHANNEL_SOURCES = {"reddit": "subreddits", "telegram": "public channels"}
+
+
+def missing_keys(logical: str) -> list[str]:
+    """The .env variables `logical` still needs (empty when it needs none or all are set). Never reads values out."""
+    from socmint.core.settings import get_settings
+
+    s = get_settings()
+    return [k.upper() for k in KEY_GATED.get(logical, ()) if not getattr(s, k, "")]
 
 
 def default_event_sources() -> list[str]:
-    """Sources a new event uses by default right now: the no-key sources."""
-    return list(NO_KEY_SOURCES)
+    """Sources a new event uses by default: the no-key sources, plus YouTube / Fact Check when their key is set."""
+    return [*NO_KEY_SOURCES, *[lg for lg in EVENT_KEY_SOURCES if not missing_keys(lg)]]
 # logical source name -> (sources.yaml type, rss kind or None)
 LOGICAL_SOURCES: dict[str, tuple[str, str | None]] = {
     "bluesky": ("bluesky", None), "mastodon": ("mastodon", None), "news_rss": ("rss", "news"),
@@ -86,6 +98,31 @@ class InvestigationConfig(BaseModel):
 
     def to_json(self) -> dict[str, Any]:
         return self.model_dump(mode="json", exclude={"name", "kind", "description", "purpose", "synthetic"})
+
+
+def source_plan(cfg: InvestigationConfig) -> list[tuple[str, str]]:
+    """(source, note) for each source this investigation uses and, for events, each one it does not, with why."""
+    candidates = [*NO_KEY_SOURCES, *EVENT_KEY_SOURCES, *CHANNEL_SOURCES] if cfg.kind == "event" else []
+    out = []
+    for lg in dict.fromkeys([*cfg.sources, *candidates]):
+        miss = missing_keys(lg)
+        need = f"no_key: set {' and '.join(miss)}"
+        listed = CHANNEL_SOURCES.get(lg)
+        if lg in cfg.sources:
+            if miss:
+                note = f"selected, but {need} (reported as no_key at collect)"
+            elif listed and cfg.kind == "event" and not (cfg.channels.get(lg) or cfg.handles.get(lg)):
+                note = f"used, but finds nothing until {listed} are listed under `channels: {lg}:`"
+            else:
+                note = "used"
+        elif listed:
+            note = f"skipped (only for events that list {listed} under `channels: {lg}:`)"
+        elif miss:
+            note = f"skipped ({need})"
+        else:
+            note = "not selected"
+        out.append((lg, note))
+    return out
 
 
 def load_file(path: str | Path) -> list[InvestigationConfig]:

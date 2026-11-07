@@ -279,14 +279,15 @@ def inv_create(
     terms: str = typer.Option(None, "--terms", help="Comma-separated keywords/hashtags (event)."),
     lang: str = typer.Option("en", "--lang", help="Language of --terms (en, hi, mr, hinglish)."),
     handle: list[str] = typer.Option(None, "--handle", help="platform:handle, repeatable (subject/group)."),
-    source: list[str] = typer.Option(None, "--source", help="Logical source, repeatable (default: no-key sources)."),
+    source: list[str] = typer.Option(None, "--source", help="Logical source, repeatable (default for an event: the "
+                                     "no-key sources plus YouTube / Fact Check when their key is in .env)."),
     description: str = typer.Option("", "--description"),
 ) -> None:
     """Create investigation(s) from a YAML file or from options."""
     from pydantic import ValidationError
 
     from socmint.core.db import init_db
-    from socmint.investigate.config import InvestigationConfig, load_file, parse_handles
+    from socmint.investigate.config import InvestigationConfig, load_file, parse_handles, source_plan
     from socmint.investigate.runner import create
 
     init_db()
@@ -309,6 +310,41 @@ def inv_create(
             typer.echo(f"skipped {c.name!r}: {e}")
             continue
         typer.echo(f"created investigation #{iid} [{c.kind}] {c.name}  sources: {', '.join(c.sources)}")
+        for logical, note in source_plan(c):
+            typer.echo(f"  {logical:<18} {note}")
+
+
+@inv_app.command("edit")
+def inv_edit(
+    ref: str = typer.Argument(..., help="Investigation id or name."),
+    add_terms: str = typer.Option(None, "--add-terms", help="Comma-separated keywords/hashtags to add (under --lang)."),
+    remove_terms: str = typer.Option(None, "--remove-terms", help="Comma-separated terms to remove (any language)."),
+    lang: str = typer.Option("en", "--lang", help="Language of --add-terms (en, hi, mr, hinglish)."),
+    add_source: list[str] = typer.Option(None, "--add-source", help="Logical source to add, repeatable."),
+    remove_source: list[str] = typer.Option(None, "--remove-source", help="Logical source to remove, repeatable."),
+    purpose: str = typer.Option(None, "--purpose", help="New purpose (why this target is monitored)."),
+) -> None:
+    """Change an investigation's terms, sources or purpose (audited with the before and after)."""
+    from socmint.core.db import init_db
+    from socmint.investigate.config import source_plan
+    from socmint.investigate.runner import InvestigationNotFound, config_of, edit, get
+
+    def split(v: str | None) -> list[str]:
+        return [t.strip() for t in (v or "").split(",") if t.strip()]
+
+    init_db()
+    try:
+        change = edit(_inv_ref(ref), add_terms=split(add_terms), remove_terms=split(remove_terms), lang=lang,
+                      add_sources=list(add_source or []), remove_sources=list(remove_source or []), purpose=purpose)
+    except (ValueError, InvestigationNotFound) as e:
+        typer.echo(f"not changed: {e}", err=True)
+        raise typer.Exit(1) from None
+    for k in change["after"]:
+        typer.echo(f"{k}: {change['before'][k]} -> {change['after'][k]}")
+    cfg = config_of(get(change["id"]))
+    for logical, note in source_plan(cfg):
+        if logical in cfg.sources and note != "used":
+            typer.echo(f"  {logical:<18} {note}")
 
 
 @inv_app.command("list")

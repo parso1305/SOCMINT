@@ -5,6 +5,7 @@ Every create, collect, view, export, promote and delete is written to `audit_log
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections import Counter
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select
 
 from socmint.core.db import audit, session_scope
@@ -74,6 +76,46 @@ def create(cfg: InvestigationConfig, who: str | None = None) -> int:
         audit(s, who or actor(), "investigation_create",
               f"id={inv.id} kind={cfg.kind} name={cfg.name} purpose={cfg.purpose}")
         return inv.id
+
+
+def edit(ref: int | str, add_terms: list[str] | None = None, remove_terms: list[str] | None = None, lang: str = "en",
+         add_sources: list[str] | None = None, remove_sources: list[str] | None = None, purpose: str | None = None,
+         who: str | None = None) -> dict[str, Any]:
+    """Change an investigation's terms, sources or purpose. The new config is validated like a new one; nothing is
+    written unless something changes. Audited as `investigation_edit` with the changed fields before and after.
+    `remove_terms` match case-insensitively in any language; `add_terms` go under `lang`."""
+    inv = get(ref)
+    cfg = config_of(inv)
+    terms = {k: list(v) for k, v in cfg.terms.items()}
+    have = {t.casefold() for v in terms.values() for t in v}
+    for t in (x.strip() for x in add_terms or []):
+        if t and t.casefold() not in have:
+            terms.setdefault(lang.strip().lower() or "en", []).append(t)
+            have.add(t.casefold())
+    drop = {t.strip().casefold() for t in remove_terms or [] if t.strip()}
+    terms = {k: kept for k, v in terms.items() if (kept := [t for t in v if t.casefold() not in drop])}
+    sources = list(dict.fromkeys([*cfg.sources, *(x.strip() for x in add_sources or [] if x.strip())]))
+    sources = [x for x in sources if x not in set(remove_sources or [])]
+    if not sources:
+        raise ValueError("an investigation needs at least one source")
+    before = {"terms": cfg.terms, "sources": cfg.sources, "purpose": cfg.purpose}
+    try:
+        new = cfg.model_copy(update={"terms": terms, "sources": sources,
+                                     "purpose": cfg.purpose if purpose is None else purpose})
+        new = InvestigationConfig(**new.model_dump())  # re-run every validator (purpose, terms, source names)
+    except ValidationError as e:
+        raise ValueError("; ".join(str(x["msg"]).removeprefix("Value error, ") for x in e.errors())) from None
+    after = {"terms": new.terms, "sources": new.sources, "purpose": new.purpose}
+    changed = [k for k in after if after[k] != before[k]]
+    if not changed:
+        raise ValueError("nothing to change: the terms, sources and purpose are already like that")
+    change = {"id": inv.id, "before": {k: before[k] for k in changed}, "after": {k: after[k] for k in changed}}
+    with session_scope() as s:
+        row = s.get(Investigation, inv.id)
+        row.config = new.to_json()
+        row.purpose = new.purpose
+        audit(s, who or actor(), "investigation_edit", json.dumps(change, ensure_ascii=False))
+    return change
 
 
 def get(ref: int | str) -> Investigation:

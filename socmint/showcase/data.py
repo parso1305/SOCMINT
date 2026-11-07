@@ -15,7 +15,16 @@ import pandas as pd
 from socmint.core.settings import get_settings
 from socmint.core.status import normalize
 from socmint.investigate import report, runner
-from socmint.investigate.config import NO_KEY_SOURCES, InvestigationConfig, parse_handles
+from socmint.investigate.config import (
+    CHANNEL_SOURCES,
+    EVENT_KEY_SOURCES,
+    LOGICAL_SOURCES,
+    NO_KEY_SOURCES,
+    InvestigationConfig,
+    default_event_sources,
+    missing_keys,
+    parse_handles,
+)
 
 KINDS = {"Event": "event", "Person / Account": "subject", "Group": "group"}
 STATUS_COLOR = {"ok": "green", "partial": "orange", "throttled": "violet", "no_key": "gray", "offline": "gray",
@@ -259,13 +268,23 @@ def parse_terms(text: str) -> dict[str, list[str]]:
     return out
 
 
+def split_terms(text: str) -> list[str]:
+    return [t.strip() for t in re.split(r"[,\n]", text or "") if t.strip()]
+
+
 def build_config(kind_label: str, name: str, purpose: str, targets: str, sources: list[str],
-                 description: str = "") -> InvestigationConfig:
-    """Validate the sidebar form (raises ValueError / pydantic ValidationError with a readable message)."""
+                 description: str = "", hi_terms: str = "", mr_terms: str = "") -> InvestigationConfig:
+    """Validate the sidebar form (raises ValueError / pydantic ValidationError with a readable message).
+    `hi_terms` / `mr_terms` (their own input lines) are stored under `hi` / `mr`."""
     kind = KINDS[kind_label]
     if kind == "event":
+        terms = parse_terms(targets)
+        for lang, line in (("hi", hi_terms), ("mr", mr_terms)):
+            for t in split_terms(line):
+                if t not in terms.get(lang, []):
+                    terms.setdefault(lang, []).append(t)
         return InvestigationConfig(kind=kind, name=name.strip(), purpose=purpose, description=description,
-                                   terms=parse_terms(targets), sources=sources)
+                                   terms=terms, sources=sources)
     lines = [ln.strip() for ln in (targets or "").splitlines() if ln.strip()]
     handles = parse_handles(lines)
     return InvestigationConfig(kind=kind, name=name.strip(), purpose=purpose, description=description,
@@ -273,7 +292,22 @@ def build_config(kind_label: str, name: str, purpose: str, targets: str, sources
 
 
 def default_sources() -> list[str]:
-    return list(NO_KEY_SOURCES)
+    return default_event_sources()
+
+
+def source_options() -> list[dict[str, Any]]:
+    """Every logical source for the form: available (keys set), the .env variables it still needs, and whether a
+    new event uses it by default. A source with missing keys is shown greyed out with the variable name."""
+    defaults = default_event_sources()
+    order = [*NO_KEY_SOURCES, *EVENT_KEY_SOURCES, *CHANNEL_SOURCES]
+    out = []
+    for lg in [*order, *sorted(set(LOGICAL_SOURCES) - set(order))]:
+        miss = missing_keys(lg)
+        label = lg + (f" — needs {' and '.join(miss)} in .env" if miss else "")
+        if not miss and lg in CHANNEL_SOURCES:
+            label += f" (only inside listed {CHANNEL_SOURCES[lg]})"
+        out.append({"source": lg, "label": label, "available": not miss, "missing": miss, "default": lg in defaults})
+    return out
 
 
 def create_and_collect(cfg: InvestigationConfig, progress=None) -> tuple[int, dict[str, Any]]:
