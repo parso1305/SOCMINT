@@ -100,3 +100,4 @@ investigate:
   subject_window_days: 30    # first collection of a subject or group (recent public posts)
   per_source_limit: 200      # max posts per source per collection
   top_authors: 25            # authors linked as `top_author` per investigation
+  max_parallel_sources: 4    # sources fetched at the same time (stores stay sequential; per-host rate limits hold)

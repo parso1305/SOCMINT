@@ -61,7 +61,10 @@ class PoliteClient:
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
         self._last_call: dict[str, float] = {}
         self._host_rate: dict[str, float] = {}
-        self._lock = threading.Lock()
+        # One lock per host (and per robots.txt base): parallel fetches to different hosts never wait on each
+        # other, while requests to the same host stay spaced by its rate limit.
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
         self._client = httpx.Client(
             headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip, deflate"},
             timeout=self.timeout,
@@ -81,26 +84,32 @@ class PoliteClient:
         """Check robots.txt (cached per host). Missing/unreadable robots.txt means allowed."""
         p = urlparse(url)
         base = f"{p.scheme}://{p.netloc}"
-        if base not in self._robots:
-            rp: urllib.robotparser.RobotFileParser | None = urllib.robotparser.RobotFileParser()
-            try:
-                self._wait(p.netloc)  # robots.txt counts against the host's rate limit too
-                r = self._client.get(base + "/robots.txt", timeout=10)
-                ctype = r.headers.get("content-type", "")
-                if r.status_code == 200 and "html" not in ctype.lower():
-                    rp.parse(r.text.splitlines())
-                else:
+        with self._lock_for("robots " + base):  # concurrent callers share one robots.txt fetch per host
+            if base not in self._robots:
+                rp: urllib.robotparser.RobotFileParser | None = urllib.robotparser.RobotFileParser()
+                try:
+                    self._wait(p.netloc)  # robots.txt counts against the host's rate limit too
+                    r = self._client.get(base + "/robots.txt", timeout=10)
+                    ctype = r.headers.get("content-type", "")
+                    if r.status_code == 200 and "html" not in ctype.lower():
+                        rp.parse(r.text.splitlines())
+                    else:
+                        rp = None
+                except httpx.HTTPError:
                     rp = None
-            except httpx.HTTPError:
-                rp = None
-            self._robots[base] = rp
-        rp = self._robots[base]
+                self._robots[base] = rp
+            rp = self._robots[base]
         return True if rp is None else rp.can_fetch(self.user_agent, url)
 
     # -- rate limit -----------------------------------------------------------
+    def _lock_for(self, key: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.Lock())
+
     def _wait(self, host: str) -> None:
+        """Sleep until `host`'s next slot. Holds only that host's lock, so other hosts are never delayed."""
         interval = self._host_rate.get(host, self.default_rate)
-        with self._lock:
+        with self._lock_for("host " + host):
             last = self._last_call.get(host, 0.0)
             delay = last + interval - time.monotonic()
             if delay > 0:
@@ -201,11 +210,13 @@ class PoliteClient:
 
 
 _shared: PoliteClient | None = None
+_shared_lock = threading.Lock()
 
 
 def get_client() -> PoliteClient:
-    """Process-wide shared client (so per-host rate limits apply across sources)."""
+    """Process-wide shared client (so per-host rate limits apply across sources and threads)."""
     global _shared
-    if _shared is None:
-        _shared = PoliteClient()
-    return _shared
+    with _shared_lock:
+        if _shared is None:
+            _shared = PoliteClient()
+        return _shared

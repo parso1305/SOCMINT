@@ -9,6 +9,8 @@ import os
 import time
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -170,6 +172,7 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
         if progress:
             progress(name, run)
 
+    jobs: list[tuple[str, dict[str, Any]]] = []
     for logical in sources:
         if logical not in LOGICAL_SOURCES:
             report(logical, _finish_run(inv, logical, "unsupported", detail=f"unknown source {logical!r}"))
@@ -178,10 +181,17 @@ def collect(ref: int | str, only_source: str | None = None, factory: SourceFacto
         if not cfgs:
             report(logical, _finish_run(inv, logical, "unsupported",
                                         detail="no enabled source of this kind in config/sources.yaml"))
-        for scfg in cfgs:
-            run, ids = _collect_one(inv, cfg, logical, scfg, factory, since, limit)
+        jobs += [(logical, scfg) for scfg in cfgs]
+    # Fetch in parallel (network only); store sequentially here, in completion order, so SQLite sees one writer
+    # and `progress` (Streamlit) is only ever called from this thread.
+    workers = max(1, int(threshold("investigate.max_parallel_sources", 4)))
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="collect") as pool:
+        futures = [pool.submit(_fetch_one, inv, cfg, logical, scfg, factory, since, limit) for logical, scfg in jobs]
+        for fut in as_completed(futures):
+            fetched = fut.result()
+            run, ids = _store_fetched(inv, fetched)
             new_ids |= ids
-            report(scfg["name"], run)
+            report(fetched.name, run)
     _link_top_authors(inv.id)
     enriched: dict[str, Any] = {}
     if enrich_after and new_ids:
@@ -202,22 +212,55 @@ def _finish_run(inv: Investigation, source: str, status: str, started: datetime 
     return {"source": source, "status": status, "fetched": fetched, "new": new, "detail": detail}
 
 
-def _collect_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg: dict[str, Any],
-                 factory: SourceFactory, since: datetime, limit: int) -> tuple[dict[str, Any], set[int]]:
-    name = scfg["name"]
-    started = utcnow()
-    t0 = time.monotonic()
+@dataclass
+class _Fetched:
+    """One source's fetch step result, handed from a worker thread to the storing thread."""
+
+    name: str
+    started: datetime
+    t0: float
+    status: str = "ok"
+    detail: str | None = None
+    res: FetchResult | None = None
+    matched: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
+    account_links: list[tuple[str, str, str]] = field(default_factory=list)
+
+
+def _store_fetched(inv: Investigation, f: _Fetched) -> tuple[dict[str, Any], set[int]]:
+    """Store step (calling thread only): DB writes + the collection_runs row."""
+    if f.res is None:
+        return _finish_run(inv, f.name, f.status, f.started, detail=f.detail), set()
+    try:
+        new_ids = _store(inv, f.res, f.matched, f.account_links)
+    except Exception as e:  # noqa: BLE001  (a storage failure stays this source's failure)
+        log.warning("investigation_store_failed", extra={"source": f.name, "error": str(e)[:300]})
+        return _finish_run(inv, f.name, "error", f.started, detail=f"{type(e).__name__}: {e}"[:1000]), set()
+    detail = "; ".join(f.res.notes) or None
+    return _finish_run(inv, f.name, f.status, f.started, fetched=len(f.res.items), new=len(new_ids),
+                       detail=(detail or "") + f" ({time.monotonic() - f.t0:.1f} s)"), new_ids
+
+
+def _fetch_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scfg: dict[str, Any],
+               factory: SourceFactory, since: datetime, limit: int) -> _Fetched:
+    """Fetch step (worker thread): network only, no DB access, never raises."""
+    out = _Fetched(name=scfg["name"], started=utcnow(), t0=time.monotonic())
     # per-investigation scoping of "search within" lists (Telegram channels, subreddits)
     scfg = dict(scfg)
     if logical == "telegram" and (cfg.channels.get("telegram") or cfg.handles.get("telegram")):
         scfg["channels"] = cfg.channels.get("telegram") or cfg.handles.get("telegram")
     if logical == "reddit" and cfg.channels.get("reddit"):
         scfg["subreddits"] = cfg.channels["reddit"]
+
+    def fail(status: str, detail: str) -> _Fetched:
+        out.status, out.detail = status, detail
+        return out
+
+    name = out.name
     try:
         src = factory(logical, scfg)
         ok, why = src.availability()
         if not ok:
-            return _finish_run(inv, name, "missing_key", started, detail=why), set()
+            return fail("missing_key", why)
         res = FetchResult()
         matched: dict[tuple[str, str], dict[str, Any]] = {}
         account_links: list[tuple[str, str, str]] = []  # (account key, role, added_by)
@@ -239,7 +282,7 @@ def _collect_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scf
             platform = next((p for p, lg in PLATFORMS.items() if lg == logical), None)
             handles = cfg.handles.get(platform or "", [])
             if not handles:
-                return _finish_run(inv, name, "ok", started, detail=f"no {platform} handles in this investigation"), set()
+                return fail("ok", f"no {platform} handles in this investigation")
             if "accounts" not in src.capabilities:
                 raise UnsupportedCapability(f"{name} cannot collect accounts")
             role = "subject" if cfg.kind == "subject" else "member"
@@ -261,19 +304,17 @@ def _collect_one(inv: Investigation, cfg: InvestigationConfig, logical: str, scf
         for it in res.items:
             it.meta.setdefault("collected_for", inv.id)  # kept only on rows this collection creates
             it.synthetic = it.synthetic or inv.synthetic
-        new_ids = _store(inv, res, matched, account_links)
-        detail = "; ".join(res.notes) or None
-        return _finish_run(inv, name, "ok", started, fetched=len(res.items), new=len(new_ids),
-                           detail=(detail or "") + f" ({time.monotonic() - t0:.1f} s)"), new_ids
+        out.res, out.matched, out.account_links = res, matched, account_links
+        return out
     except UnsupportedCapability as e:
-        return _finish_run(inv, name, "unsupported", started, detail=str(e)), set()
+        return fail("unsupported", str(e))
     except RobotsDisallowed as e:
-        return _finish_run(inv, name, "blocked_by_robots", started, detail=str(e)), set()
+        return fail("blocked_by_robots", str(e))
     except OfflineError as e:
-        return _finish_run(inv, name, "offline", started, detail=str(e)), set()
+        return fail("offline", str(e))
     except (HttpError, Exception) as e:  # noqa: BLE001  (per-source isolation is the whole point)
         log.warning("investigation_source_failed", extra={"source": name, "error": str(e)[:300]})
-        return _finish_run(inv, name, "error", started, detail=f"{type(e).__name__}: {e}"[:1000]), set()
+        return fail("error", f"{type(e).__name__}: {e}"[:1000])
 
 
 def _store(inv: Investigation, res: FetchResult, matched: dict[tuple[str, str], dict[str, Any]],
