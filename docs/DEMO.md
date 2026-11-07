@@ -28,7 +28,9 @@ The yellow **DEMO DATA (synthetic)** banner is shown on every investigation.
   source's last collection status (`Bluesky (demo) · 77 new`).
 - *Overview*: the posts-per-6-hours chart peaks about 2½ days ago, when the rain was heaviest. **Key findings** lists,
   in order: the possible-coordination group, the fact-check match, the scam indicators, the fastest-growing narrative
-  ("burst, demosagar, dam, flood") and the most common category. Categories ignore the event's own search terms, so
+  ("burst, demosagar, dam, flood") and the most common category. Growth is rated because the demo event carries a
+  synthetic collection history (a backdated run every 6 h across its 5 days, as if it had been watched); a live
+  investigation says "growth not rated yet: N h of history, needs 72 h" until it has collected for 72 h. Categories ignore the event's own search terms, so
   "civic safety" counts only posts that mention rescue, helplines, relief camps, heavy rain and so on. Language chart:
   en / hi / mr / Hinglish.
 - *Posts*: filter Category = `scam`. These are the fake relief appeals using UPI `punerelief.help@okdemo` and the
@@ -40,10 +42,11 @@ The yellow **DEMO DATA (synthetic)** banner is shown on every investigation.
 - *Network*: red lines join the **8 accounts that posted near-identical text within 6 minutes** across three
   platforms. The table below lists the possible-coordination groups; the top one scores about 0.93.
   **Promote to Group** turns a group into its own investigation (the demo has already done this once; see 3).
-- *Evidence & export*: suspected indicators, fact-check matches, narratives, the collection log, and **Prepare JSON /
-  CSV export**. There is no narrative growth *alert*: investigations raise those only after 72 h of collecting (a
-  first collection has no baseline), and the demo event is collected in one go. The download is a zip of posts, accounts, edges, indicators, the summary and the config, with a
-  SHA-256 `manifest.json`.
+- *Evidence & export*: suspected indicators, fact-check matches, narratives, the collection log (the backdated runs
+  say so in their detail), and **Prepare JSON / CSV export**. Investigations raise narrative growth alerts only after
+  72 h of collecting (a first collection has no baseline); the demo event's synthetic history passes that, so the
+  debunked dam rumour raises "resurfacing fast" alerts in the analyst dashboard and the API. The download is a zip of
+  posts, accounts, edges, indicators, the summary and the config, with a SHA-256 `manifest.json`.
 
 **2. Subject: "Demo: stock-tip channel"** (pick it in the sidebar)
 - The purpose is shown under the title. Subjects always carry a recorded purpose.

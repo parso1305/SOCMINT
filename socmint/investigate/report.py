@@ -31,9 +31,9 @@ from socmint.core.models import (
     utcnow,
 )
 from socmint.core.schemas import account_key
-from socmint.core.settings import get_settings
+from socmint.core.settings import get_settings, threshold
 from socmint.core.status import normalize
-from socmint.investigate.runner import actor, config_of, get
+from socmint.investigate.runner import actor, collected_hours, config_of, get
 from socmint.investigate.suggest import from_posts
 from socmint.understand.urls import host_of
 
@@ -213,6 +213,9 @@ def summary(ref: int | str) -> dict[str, Any]:
         "suggested_terms": from_posts(prows, cfg),
         "first_seen": min(times) if times else None, "last_seen": max(times) if times else None,
         "collection": {"runs": runs[:200], "latest_by_source": latest},
+        # narrative growth is rated only once the investigation has collected for the baseline (M20.2)
+        "history_hours": round(collected_hours(inv.id), 2),
+        "baseline_hours": float(threshold("narratives.min_baseline_hours", 72)),
     }
 
 

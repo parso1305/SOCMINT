@@ -154,6 +154,7 @@ def seed_investigations(now=None) -> dict[str, Any]:
         purpose="Public-safety monitoring: rumours, fake relief appeals and coordinated posting during floods (demo)."),
         who)
     out["event"] = {"id": ev, "collect": runner.collect(ev, factory=factory, resolver=resolver, who=who)}
+    scenario.backdate_collection_runs(ev, now)  # synthetic watch history, so the event's growth is rated
     out["event"]["analyze"] = runner.analyze(ev, who=who)
 
     subj = runner.create(InvestigationConfig(

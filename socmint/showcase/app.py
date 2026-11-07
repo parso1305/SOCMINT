@@ -286,8 +286,11 @@ with evidence:
         st.info("No fact-check matches.")
     if s["narratives"]:
         st.subheader("Narratives")
+        unrated = data.growth_note(s)
+        if unrated:
+            st.caption(unrated)
         st.dataframe(pd.DataFrame([{"keywords": ", ".join(n["keywords"][:6]), "posts": n["size"],
-                                    "last 24 h": n["count_24h"], "growth": n["growth_rate"],
+                                    "last 24 h": n["count_24h"], "growth": None if unrated else n["growth_rate"],
                                     "fact-checked": bool(n["matched_factcheck_ids"])} for n in s["narratives"]]),
                      hide_index=True, width="stretch")
     for a in s["market_alerts"]:

@@ -87,6 +87,24 @@ def source_status(d: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda c: c["label"].lower())
 
 
+def _hours(h: float) -> str:
+    return "under 1 h" if h < 1 else f"{h:.0f} h"
+
+
+def growth_rated(s: dict[str, Any]) -> bool:
+    """Narrative growth compares the last 24 h with a baseline, so it means something only once the investigation
+    has collected for `narratives.min_baseline_hours` (a first collection makes every narrative look new)."""
+    return s.get("history_hours", 0) >= s.get("baseline_hours", 72)
+
+
+def growth_note(s: dict[str, Any]) -> str | None:
+    """Why the narratives table shows no growth yet (None once growth is rated)."""
+    if growth_rated(s):
+        return None
+    return (f"Growth not rated yet: {_hours(s.get('history_hours', 0))} of collection history, a baseline needs "
+            f"{_hours(s.get('baseline_hours', 72))} (narratives.min_baseline_hours).")
+
+
 def key_findings(d: dict[str, Any], n: int = 5) -> list[str]:
     """Up to `n` one-line findings, most actionable first."""
     s = d["summary"]
@@ -103,8 +121,14 @@ def key_findings(d: dict[str, Any], n: int = 5) -> list[str]:
         out.append(f"Suspected scam indicators seen in posts: {vals}.")
     for a in s["market_alerts"][:1]:
         out.append(f"{a['title']} (risk score {a['risk_score']:.0f}). Risk indicator only.")
-    grow = sorted((x for x in s["narratives"] if x["count_24h"]), key=lambda x: -(x["growth_rate"] or 0))
-    for x in grow[:1]:
+    active = [x for x in s["narratives"] if x["count_24h"]]
+    if active and not growth_rated(s):
+        x = max(active, key=lambda x: x["count_24h"])
+        out.append(f"Most active narrative: {', '.join(x['keywords'][:4])} ({x['count_24h']} posts in the last 24 h; "
+                   f"growth not rated yet: {_hours(s['history_hours'])} of history, "
+                   f"needs {_hours(s['baseline_hours'])}).")
+    elif active:
+        x = max(active, key=lambda x: x["growth_rate"] or 0)
         out.append(f"Fastest-growing narrative: {', '.join(x['keywords'][:4])} "
                    f"({x['count_24h']} posts in the last 24 h, growth x{x['growth_rate']:.1f}).")
     cats = {k: v for k, v in s["by_category"].items() if k not in ("other",)}

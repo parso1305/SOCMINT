@@ -350,6 +350,41 @@ def fixture_factory(now: datetime | None = None):
     return factory, resolver
 
 
+# ------------------------------------------------------------------------------------------- synthetic history
+WATCH_EVERY_HOURS = 6
+WATCH_CYCLES = 20  # 20 x 6 h = the scenario's 5-day window
+
+
+def backdate_collection_runs(inv_id: int, now: datetime | None = None) -> int:
+    """Synthetic only (DECISIONS.md, M20.2): record the demo event's collection history as if
+    `investigate watch --every 6h` had run across the scenario's 5-day window, so its narrative growth is rated.
+    Adds one `ok` run per source every 6 h before the real collect; each counts the event's posts from that source
+    published in the 6 h before it, and its detail says it is backdated. Returns the number of rows added."""
+    from sqlalchemy import select
+
+    from socmint.core.db import session_scope
+    from socmint.core.models import CollectionRun, Investigation, InvestigationItem, Item
+
+    now = now or utcnow()
+    with session_scope() as s:
+        if not s.get(Investigation, inv_id).synthetic:
+            raise ValueError("backdated collection runs are for synthetic (demo) investigations only")
+        posts = s.execute(select(Item.source, Item.published_at)
+                          .join(InvestigationItem, InvestigationItem.item_id == Item.id)
+                          .where(InvestigationItem.investigation_id == inv_id)).all()
+        rows = 0
+        for k in range(WATCH_CYCLES, 0, -1):
+            at = now - timedelta(hours=WATCH_EVERY_HOURS * k)
+            for src in sorted({p.source for p in posts}):
+                n = sum(1 for p in posts if p.source == src and p.published_at
+                        and at - timedelta(hours=WATCH_EVERY_HOURS) < p.published_at <= at)
+                s.add(CollectionRun(investigation_id=inv_id, source=src, started_at=at,
+                                    finished_at=at + timedelta(seconds=20), status="ok", fetched=n, new=n,
+                                    detail="synthetic demo history: backdated run (watch every 6 h)", synthetic=True))
+                rows += 1
+    return rows
+
+
 def factchecks(now: datetime | None = None) -> list[FactCheckIn]:
     now = now or utcnow()
     return [FactCheckIn(publisher=f["publisher"], title=f["title"], url=f["url"], claim_text=f["claim_text"],

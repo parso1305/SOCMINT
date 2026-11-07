@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy import func, select
 
 from socmint import scenario
 from socmint.core.db import session_scope
 from socmint.core.models import Account, Alert, CollectionRun, Investigation, Item, ItemLabel
+from socmint.showcase.data import key_findings
 
 
 def test_scenario_data_is_fictional_and_synthetic():
@@ -55,6 +58,15 @@ def test_seed_investigations_end_to_end():
     assert any(i["type"] == "upi" and i["value"] == scenario.SCAM_UPI for i in ev["indicators"])
     assert any(i["value"] == scenario.SCAM_DOMAIN for i in ev["indicators"])
     assert any("Demosagar" in f["title"] for f in ev["factcheck_matches"])
+    # M20.2: synthetic watch history, one run per source every 6 h across the 5-day window (demo only)
+    hist = [r for r in ev["collection"]["runs"] if "backdated" in (r["detail"] or "")]
+    starts = sorted({r["started_at"] for r in hist})
+    assert len(starts) == 20 and all(b - a == timedelta(hours=6) for a, b in zip(starts, starts[1:], strict=False))
+    assert {r["source"] for r in hist} == set(ev["by_source"]) and all(r["status"] == "ok" for r in hist)
+    assert sum(r["new"] for r in hist) <= ev["counts"]["posts"]
+    assert ev["history_hours"] >= 119 and ev["baseline_hours"] == 72
+    assert "held back" not in (out["event"]["analyze"]["modules"]["narratives"]["result"].get("note") or "")
+    assert any(f.startswith("Fastest-growing narrative") for f in key_findings({"summary": ev}))
 
     subj = report.summary(out["subject"]["id"])
     assert [a["role"] for a in report.accounts(out["subject"]["id"])] == ["subject", "subject"]
