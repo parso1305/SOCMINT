@@ -13,8 +13,9 @@ createSession is limited to 30 per 5 minutes and 300 per day per account, so the
 On HTTP 401 or an `ExpiredToken` / `InvalidToken` answer: refresh once, then log in again once, then fail.
 
 Tokens and the password never reach logs, exception messages, `collection_runs.detail` or the HTTP disk cache:
-every authenticated call uses `cache_ttl=0`, the cache key never includes headers or the login body, and errors
-raised from here only name the endpoint and the HTTP status.
+every call made here (login, refresh, searchPosts) uses `cache_ttl=0`, so nothing is read from or written to the
+disk cache (its key would include the login body; headers are never part of it), and errors raised from here only
+name the endpoint and the HTTP status. Keep `cache_ttl=0` on any new call in this module.
 """
 
 from __future__ import annotations
