@@ -79,7 +79,7 @@ uv run socmint investigate create --kind event --name "test" --terms "flood,ब�
 uv run socmint investigate collect "test"           # Bluesky, Mastodon, news RSS, GDELT (+ YouTube / Fact Check with keys)
 uv run socmint investigate edit "test" --add-terms "पूर, धरण" --lang mr --add-source youtube   # audited before/after
 uv run socmint investigate analyze "test"           # narratives, possible coordination, market risk (scoped)
-uv run socmint investigate show "test"              # summary (--json for everything)
+uv run socmint investigate show "test"              # summary + suggested terms to widen an event (--json for everything)
 uv run socmint investigate export "test" --format csv   # data/exports/... with a SHA-256 manifest
 uv run socmint investigate create --kind subject --name "Platform accounts" --purpose "why" --handle bluesky:bsky.app --handle mastodon:@Mastodon@mastodon.social
 uv run socmint investigate promote-group 12 --name "Copy network" --purpose "why"

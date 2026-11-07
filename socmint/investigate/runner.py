@@ -80,17 +80,19 @@ def create(cfg: InvestigationConfig, who: str | None = None) -> int:
 
 def edit(ref: int | str, add_terms: list[str] | None = None, remove_terms: list[str] | None = None, lang: str = "en",
          add_sources: list[str] | None = None, remove_sources: list[str] | None = None, purpose: str | None = None,
-         who: str | None = None) -> dict[str, Any]:
+         who: str | None = None, add_terms_by_lang: dict[str, list[str]] | None = None) -> dict[str, Any]:
     """Change an investigation's terms, sources or purpose. The new config is validated like a new one; nothing is
     written unless something changes. Audited as `investigation_edit` with the changed fields before and after.
-    `remove_terms` match case-insensitively in any language; `add_terms` go under `lang`."""
+    `remove_terms` match case-insensitively in any language; `add_terms` go under `lang`, and
+    `add_terms_by_lang` adds several languages in one audited change (accepted suggestions)."""
     inv = get(ref)
     cfg = config_of(inv)
     terms = {k: list(v) for k, v in cfg.terms.items()}
     have = {t.casefold() for v in terms.values() for t in v}
-    for t in (x.strip() for x in add_terms or []):
+    adds = [(lang, t) for t in add_terms or []] + [(lg, t) for lg, ts in (add_terms_by_lang or {}).items() for t in ts]
+    for lg, t in ((lg.strip().lower() or "en", t.strip()) for lg, t in adds):
         if t and t.casefold() not in have:
-            terms.setdefault(lang.strip().lower() or "en", []).append(t)
+            terms.setdefault(lg, []).append(t)
             have.add(t.casefold())
     drop = {t.strip().casefold() for t in remove_terms or [] if t.strip()}
     terms = {k: kept for k, v in terms.items() if (kept := [t for t in v if t.casefold() not in drop])}

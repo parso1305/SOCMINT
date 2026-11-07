@@ -134,6 +134,23 @@ with ov:
             st.markdown(f"- {f}")
         if not findings:
             st.info("Nothing notable yet.")
+        if inv["kind"] == "event":
+            st.subheader("Suggested terms (add to widen collection)")
+            sugg = {x["term"]: x for x in s["suggested_terms"]}
+            if sugg:
+                picked = st.multiselect(
+                    "Suggested terms (seen in 3+ posts from 2+ accounts; never added automatically)", list(sugg),
+                    format_func=lambda t: f"{t} · {sugg[t]['posts']} posts · {sugg[t]['accounts']} accounts",
+                    key=f"suggest_{inv_id}")
+                if st.button("Add selected", disabled=not picked, key=f"suggest_add_{inv_id}"):
+                    try:
+                        data.add_suggested(inv_id, picked)
+                    except ValueError as e:
+                        st.error(f"Not added: {e}")
+                    else:
+                        st.success(f"Added {', '.join(picked)} (audited). Collect again to search for them.")
+            else:
+                st.caption("None yet: a suggestion needs a hashtag, name or word in 3+ posts from 2+ accounts.")
     a, b = st.columns(2)
     with a:
         st.subheader("Categories")
@@ -170,7 +187,9 @@ with posts_tab:
         p = next(x for x in d["posts"] if x["id"] == pid)
         with st.container(border=True):
             st.markdown(f"**{p['author_display_name'] or p['author_handle'] or p['channel'] or p['source']}** · "
-                        f"{p['platform']} · {p['published_at']:%d %b %Y %H:%M} UTC · lang `{p['lang']}`")
+                        f"{p['platform']} · "
+                        + (f"{p['published_at']:%d %b %Y %H:%M} UTC" if p["published_at"] else "time not given")
+                        + f" · lang `{p['lang']}`")
             st.write(p["text"])
             if p["url"]:
                 st.markdown(f"[Original post]({p['url']})")

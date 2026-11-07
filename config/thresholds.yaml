@@ -107,3 +107,10 @@ investigate:
   per_source_limit: 200      # max posts per source per collection
   top_authors: 25            # authors linked as `top_author` per investigation
   max_parallel_sources: 4    # sources fetched at the same time (stores stay sequential; per-host rate limits hold)
+
+# Suggested terms for events (M19.1): shown to the analyst, never added automatically
+suggest:
+  min_posts: 3          # a candidate must appear in at least this many posts
+  min_accounts: 2       # ... from at least this many accounts
+  max_suggestions: 15
+  generic_tags: ["#india", "#news", "#breaking", "#breakingnews", "#latestnews", "#trending", "#viral", "#update"]

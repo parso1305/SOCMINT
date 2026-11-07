@@ -34,6 +34,7 @@ from socmint.core.schemas import account_key
 from socmint.core.settings import get_settings
 from socmint.core.status import normalize
 from socmint.investigate.runner import actor, config_of, get
+from socmint.investigate.suggest import from_posts
 from socmint.understand.urls import host_of
 
 _IND_TYPES = {"urls": "url", "domains": "domain", "phones": "phone", "upi_ids": "upi"}
@@ -209,6 +210,7 @@ def summary(ref: int | str) -> dict[str, Any]:
         "indicators": indicators(prows),
         "factcheck_matches": sorted(fc_votes.values(), key=lambda r: -r["posts"]),
         "coordination_groups": groups, "narratives": narrs, "market_alerts": market,
+        "suggested_terms": from_posts(prows, cfg),
         "first_seen": min(times) if times else None, "last_seen": max(times) if times else None,
         "collection": {"runs": runs[:200], "latest_by_source": latest},
     }

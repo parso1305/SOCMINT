@@ -430,6 +430,14 @@ def inv_show(ref: str = typer.Argument(..., help="Investigation id or name."),
                    f"{g['time_span_minutes']:.0f} min: {g['sample_text'][:70]}")
     for m in s["market_alerts"]:
         typer.echo(f"  market risk: {m['title']} (score {m['risk_score']})")
+    if i["kind"] == "event":
+        sugg = s["suggested_terms"]
+        typer.echo("Suggested terms (add to widen collection): "
+                   + (", ".join(f"{x['term']} ({x['posts']} posts, {x['accounts']} accounts)" for x in sugg)
+                      if sugg else "none yet (needs a term in 3+ posts from 2+ accounts)"))
+        if sugg:
+            typer.echo(f'  add with: socmint investigate edit "{i["name"]}" --add-terms "{sugg[0]["term"]}" '
+                       f"--lang {sugg[0]['lang']}")
 
 
 @inv_app.command("export")

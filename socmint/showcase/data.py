@@ -313,3 +313,10 @@ def source_options() -> list[dict[str, Any]]:
 def create_and_collect(cfg: InvestigationConfig, progress=None) -> tuple[int, dict[str, Any]]:
     iid = runner.create(cfg)
     return iid, runner.collect(iid, progress=progress)
+
+
+def add_suggested(inv_id: int, terms: list[str]) -> dict[str, Any]:
+    """Overview "Add selected": the same validated, audited path as `investigate edit`."""
+    from socmint.investigate.suggest import add_suggested as add
+
+    return add(inv_id, terms)
