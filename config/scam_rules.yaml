@@ -162,7 +162,7 @@ signals:
     keywords:   # payment words that must co-occur with a UPI ID
       en: [pay, send, transfer, deposit, fee, charges, payment, registration fee, refundable]
       hi: [भुगतान, भेजें, ट्रांसफर, जमा, फीस, शुल्क, पेमेंट]
-      mr: [भरणा, पाठवा, ट्रान्सफर, जमा, फी, शुल्क, पेमेंट]
+      mr: [भरणा, पाठवा, ट्रान्सफर, जमा, फी भरा, शुल्क, पेमेंट]
       hinglish: [bhejo, pay karo, jama karo, fees, transfer karo]
   safe_browsing_hit:
     label: "Google Safe Browsing lists this URL as unsafe"

@@ -2,7 +2,8 @@
 #
 # Rules run first and always (offline). A category fires from its own keywords and/or from signals the system
 # already computes (scam score band, fact-check match, brand impersonation, market promo language).
-# Matching uses normalised text (see scam_rules.yaml): Latin keywords on word boundaries, Devanagari as substrings.
+# Matching uses normalised text (see scam_rules.yaml): Latin keywords on word boundaries; Devanagari keywords at the
+# start of a word, followed by vowel signs but not a virama or consonant (पूर matches पूराचे, never पूर्ण).
 # Every label stores the evidence that produced it. Confidences and the optional zero-shot model are configured
 # under `categorize:` in thresholds.yaml. `other` is assigned only when nothing else fires.
 
@@ -53,7 +54,7 @@ categories:
                cyclone, earthquake, dam, discharge, evacuate, evacuation, relief camp, rescue, ndrf, sdrf, imd alert,
                red alert, orange alert, helpline, road closed, roads closed, school holiday, schools closed]
           hi: [बाढ़, बाढ, बारिश, भारी बारिश, बादल फटा, भूस्खलन, बांध, डैम, राहत शिविर, बचाव, एनडीआरएफ, अलर्ट, हेल्पलाइन, सड़क बंद]
-          mr: [पूर, पाऊस, मुसळधार, अतिवृष्टी, ढगफुटी, दरड, धरण, विसर्ग, स्थलांतर, मदत छावणी, बचाव, एनडीआरएफ, अलर्ट,
+          mr: [पूर, पूरग्रस्त, पाऊस, मुसळधार, अतिवृष्टी, ढगफुटी, दरड, धरण, विसर्ग, स्थलांतर, मदत छावणी, बचाव, एनडीआरएफ, अलर्ट,
                हेल्पलाइन, रस्ता बंद, शाळांना सुट्टी]
           hinglish: [baarish, barish, paani bhar gaya, baadh, sadak band]
       accident:
@@ -83,7 +84,7 @@ categories:
       en: [election, elections, vote, voting, voter, evm, polling booth, candidate, ballot, election commission, mla, mp,
            corporator, manifesto, campaign rally, political party]
       hi: [चुनाव, मतदान, वोट, मतदाता, ईवीएम, उम्मीदवार, विधायक, सांसद, चुनाव आयोग, घोषणापत्र]
-      mr: [निवडणूक, मतदान, मत, मतदार, ईव्हीएम, उमेदवार, आमदार, खासदार, नगरसेवक, जाहीरनामा]
+      mr: [निवडणूक, मतदान, मत द्या, मतदार, ईव्हीएम, उमेदवार, आमदार, खासदार, नगरसेवक, जाहीरनामा]
       hinglish: [chunav, vote do, voting kal]
 
   health:
@@ -92,10 +93,26 @@ categories:
     zero_shot_label: "health, disease or medical advice"
     keywords:
       en: [hospital, dengue, malaria, cholera, leptospirosis, diarrhoea, diarrhea, outbreak, epidemic, vaccine, vaccination,
-           disease, infection, doctor, medicine, cure, boil water, contaminated water, drinking water]
-      hi: [अस्पताल, डेंगू, मलेरिया, हैजा, बीमारी, संक्रमण, टीका, टीकाकरण, डॉक्टर, दवा, इलाज, दूषित पानी, पानी उबाल]
-      mr: [रुग्णालय, दवाखाना, डेंग्यू, मलेरिया, कॉलरा, आजार, संसर्ग, लस, लसीकरण, डॉक्टर, औषध, उपचार, दूषित पाणी, पाणी उकळून]
+           disease, infection, doctor, medicine, cure, boil water, contaminated water, drinking water,
+           asthma, breathing, respiratory, mask]
+      hi: [अस्पताल, डेंगू, मलेरिया, हैजा, बीमारी, संक्रमण, टीका, टीकाकरण, डॉक्टर, दवा, इलाज, दूषित पानी, पानी उबाल,
+           साँस, सांस, दमा, श्वास]
+      mr: [रुग्णालय, दवाखाना, डेंग्यू, मलेरिया, कॉलरा, आजार, संसर्ग, लस घ्या, लसीकरण, डॉक्टर, औषध, उपचार, दूषित पाणी,
+           पाणी उकळून, श्वास, दमा]
       hinglish: [bimari, dawai, ilaaj, doctor ko dikhao]
+
+  environment:
+    label: "Environment / air quality"
+    enabled: true
+    zero_shot_label: "air pollution, smog, heat, water shortage or other environmental conditions"
+    # No Devanagari keyword shorter than 3 characters (they match inside too many words): "लू चल", not "लू".
+    keywords:
+      en: [air pollution, aqi, air quality, smog, pm2.5, pm10, stubble burning, crop burning, parali, firecrackers, grap,
+           odd-even, heatwave, heat wave, cold wave, water shortage, water crisis, water tanker, garbage, landfill,
+           noise pollution]
+      hi: [वायु प्रदूषण, प्रदूषण, एक्यूआई, स्मॉग, पराली, धुंध, शीतलहर, पानी की किल्लत, कूड़ा, लू चल, लू का प्रकोप]
+      mr: [वायू प्रदूषण, प्रदूषण, धुके, उष्णतेची लाट, पाणीटंचाई, पाणीकपात, कचरा]
+      hinglish: [pradushan, aqi kharab, smog]
 
   market_manipulation:
     label: "Market manipulation"

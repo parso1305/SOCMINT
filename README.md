@@ -210,8 +210,9 @@ Pluggable points: `Embedder` (e5 / TF-IDF), `DeepfakeDetector` (returns None in 
 - Narrative growth is inflated on a first run (no baseline history yet). Investigations therefore raise no narrative
   growth alerts until they have collected for `narratives.min_baseline_hours` (72 h); the narratives are still shown.
 - Investigation categories ignore the investigation's own search terms (a flood event's posts are not "civic safety"
-  just for saying "flood"; see DECISIONS.md). Devanagari keywords match as substrings so stems catch inflections; a
-  short stem can still match inside an unrelated word (for example `पूर`, flood, inside `पूर्ण`, complete).
+  just for saying "flood"; see DECISIONS.md). Devanagari keywords match at the start of a word and may be followed
+  by vowel signs (so `पूर` matches `पूराचे` but not `पूर्ण`, complete); suffixes that start with a consonant (`पूरग्रस्त`)
+  need their own keyword.
 - Scam rules are keyword-based: novel scripts or heavily misspelt messages can slip through, and regional
   languages beyond en/hi/mr (and Hinglish) are not covered. Hindi/Marathi reply text needs native-speaker review.
 - e5 claim matching uses a shipped background-mean vector computed from real headlines. Thresholds are calibrated

@@ -71,7 +71,8 @@ with real data.
 - **Fixed (b06ee9b)**: the Marathi protest keyword `संप` (strike) matched inside `संपर्क` (contact), so helpline posts got
   a protest sub-label. It is now replaced by strike phrases (`संप सुरू`, `संपावर`, `संप पुकारला`, `संपात`).
 - **Known, not fixed**: other short Devanagari stems can match inside unrelated words (`पूर`, flood, inside `पूर्ण`,
-  complete), because Devanagari keywords match as substrings so stems catch inflections. Noted in README.
+  complete), because Devanagari keywords match as substrings so stems catch inflections. Noted in README. *(Fixed
+  later in M20.1: Devanagari keywords now match at the start of a word; see Prompt 3 below.)*
 - **By design**: `investigate delete` asks for confirmation (use `--yes` in scripts). Exports and the People tab list the
   top 25 authors (`investigate.top_authors`), while the header counts every author (185 in the demo event).
 - **Not fixable here**: GDELT keeps answering HTTP 429 to this IP (fails cleanly, see SOURCES.md). Bluesky keyword

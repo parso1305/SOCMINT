@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 
 from socmint.core.patterns import DEVANAGARI_DIGITS
 
@@ -32,6 +33,20 @@ def match_text(text: str) -> str:
     """Canonical form used by keyword rules and alias matching."""
     t = strip_emoji(normalize_text(text)).translate(_DEVANAGARI_NOISE)
     return _WS.sub(" ", t).strip()
+
+
+# A Devanagari keyword matches at the start of a word: not right after another Devanagari letter, sign or digit
+# (the danda counts as punctuation). The next character may be a vowel sign, anusvara, chandrabindu or visarga
+# (so inflections such as पूराचे still match) but not a virama or a consonant (so पूर never matches पूर्ण, बंद
+# never matches बंदर). Compounds that are wanted (पूरग्रस्त) are listed as keywords of their own.
+_DEVA_WORD_START = "(?<![\u0900-\u0963\u0966-\u097f])"  # Devanagari block minus the dandas (U+0964/0965)
+_DEVA_NO_CONTINUATION = "(?![\u094d\u0915-\u0939\u0958-\u095f\u0978-\u097f])"  # virama, consonants
+
+
+@lru_cache(maxsize=8192)
+def devanagari_word(term_norm: str) -> re.Pattern[str]:
+    """Pattern for a `match_text`-normalised Devanagari keyword under the word-start rule above."""
+    return re.compile(_DEVA_WORD_START + re.escape(term_norm) + _DEVA_NO_CONTINUATION)
 
 
 def devanagari_ratio(text: str) -> float:

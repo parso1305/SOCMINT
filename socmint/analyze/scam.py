@@ -17,7 +17,7 @@ from socmint.core.models import Indicator, Item
 from socmint.core.schemas import Reason
 from socmint.core.settings import get_settings, load_config, threshold
 from socmint.understand.entities import Entities
-from socmint.understand.normalize import match_text
+from socmint.understand.normalize import devanagari_word, match_text
 from socmint.understand.urls import domain_matches, host_of, registered_domain
 
 log = get_logger(__name__)
@@ -72,7 +72,7 @@ def rules() -> tuple[list[_Rule], dict[str, Any]]:
 
 def keyword_hits(text_norm: str, latin: list[tuple[str, re.Pattern[str]]], deva: list[str]) -> list[str]:
     hits = [w for w, p in latin if p.search(text_norm)]
-    hits += [d for d in deva if d in text_norm]
+    hits += [d for d in deva if devanagari_word(d).search(text_norm)]  # word-start rule, see normalize.py
     # drop hits that are substrings of longer hits ("kyc" inside "update kyc")
     return [h for h in hits if not any(h != o and h in o for o in hits)]
 

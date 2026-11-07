@@ -115,12 +115,13 @@ def flat_terms(terms_by_lang: dict[str, list[str]] | list[str]) -> list[str]:
 class TermMatcher:
     """Client-side keyword matcher for event terms (en/hi/mr/Hinglish).
 
-    Latin terms match on word boundaries of the normalised text; Devanagari terms match as substrings
-    (stems catch inflections); "#tag" terms match the post's hashtags or the literal "#tag" in the text.
+    Latin terms match on word boundaries of the normalised text; Devanagari terms match at the start of a word
+    and may be followed by vowel signs (inflections) but not by a virama or consonant (`devanagari_word`);
+    "#tag" terms match the post's hashtags or the literal "#tag" in the text.
     """
 
     def __init__(self, terms: dict[str, list[str]] | list[str]):
-        from socmint.understand.normalize import match_text
+        from socmint.understand.normalize import devanagari_word, match_text
 
         self._norm = match_text
         self.terms = flat_terms(terms)
@@ -134,7 +135,7 @@ class TermMatcher:
             elif n.isascii():
                 self._compiled.append((t, n, re.compile(rf"(?<![a-z0-9]){re.escape(n)}(?![a-z0-9])")))
             else:
-                self._compiled.append((t, n, None))
+                self._compiled.append((t, n, devanagari_word(n)))
 
     def match(self, text: str, hashtags: Iterable[str] = ()) -> list[str]:
         mt = self._norm(text or "")
@@ -143,10 +144,8 @@ class TermMatcher:
         for orig, n, pat in self._compiled:
             if orig.lstrip().startswith("#"):
                 hit = n in tags or re.search(rf"#{re.escape(n)}(?![\w])", mt) is not None
-            elif pat is not None:
-                hit = pat.search(mt) is not None or n.replace(" ", "") in tags
             else:
-                hit = n in mt or n.replace(" ", "") in tags
+                hit = pat is not None and pat.search(mt) is not None or n.replace(" ", "") in tags
             if hit:
                 out.append(orig)
         return out
