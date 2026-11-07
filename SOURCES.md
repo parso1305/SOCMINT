@@ -42,8 +42,40 @@ The Google Fact Check Tools API (below) adds ClaimReview-backed history once a k
 | amarujala_india | https://www.amarujala.com/rss/india-news.xml | hi | live |
 | bbc_marathi | https://feeds.bbci.co.uk/marathi/rss.xml | mr | live |
 
-Checked but not used: Times of India (works, but redundant), PIB RSS (press releases, not news), and
-Loksatta / Lokmat (the feed URLs tried redirect to HTML pages).
+Checked but not used (2026-10): Times of India (works, but redundant; its RSS terms are personal use only, see
+below), PIB RSS (press releases, not news), and Loksatta / Lokmat (the feed URLs tried redirect to HTML pages).
+
+### Proposed news feeds (M18.3, checked 2026-11-07) — disabled, awaiting approval
+Each URL was taken from the publisher's own RSS page and fetched once through `PoliteClient` (our User-Agent,
+robots.txt checked first). They are in `config/sources.yaml` with `enabled: false` and
+`# PROPOSED - awaiting approval`; no event uses them until you enable them.
+
+| Name | Publisher | Lang | URL | Check (2026-11-07) |
+|---|---|---|---|---|
+| bhaskar_national | Dainik Bhaskar | hi | https://www.bhaskar.com/rss-v1--category-1061.xml | HTTP 200, robots allows, 47 items, `language=hi` |
+| bhaskar_maharashtra | Dainik Bhaskar | hi | https://www.bhaskar.com/rss-v1--category-2318.xml | HTTP 200, robots allows, 28 items |
+| bhaskar_new_delhi | Dainik Bhaskar | hi | https://www.bhaskar.com/rss-v1--category-7140.xml | HTTP 200, robots allows, 33 items |
+
+**Terms to weigh before enabling:** DB Corp's site terms (https://www.bhaskar.com/terms-and-conditions) say the
+services are "intended for the User's personal, non-commercial consumption and use only" and ask for prior written
+consent before "archived or cached data sets containing Content" are provided to others. We store headlines and
+excerpts and can export them, so enable these only if you accept that reading, or after asking DB Corp.
+
+**Candidates checked and not proposed:**
+
+| Publisher | What we found (2026-11-07) |
+|---|---|
+| Times of India | Feeds work (`timesofindia.indiatimes.com/rss.cms`), but the RSS terms grant "personal use" only and forbid aggregating or copying without Times Internet's consent — the same reason Google News RSS is excluded. |
+| Navbharat Times | Feeds work (`navbharattimes.indiatimes.com/india/rssfeed/1564454.xml`). Same publisher and RSS page template as TOI and Maharashtra Times; the terms text is not in the served page, so treated like theirs (personal use only). |
+| Maharashtra Times | Feeds work (`maharashtratimes.com/rss`, e.g. Pune `rssfeed/2429654.xml`), but the RSS page says the feeds are "only for personal use" (फक्त वैयक्तिक वापरासाठी). |
+| Deccan Herald | No RSS directory page found (`/rss-feeds`, `/rss` are 404); its published feed conditions forbid archiving and commercial use. |
+| Lokmat | `https://www.lokmat.com/rss/` answers HTTP 403 to our User-Agent. Not bypassed. |
+| Loksatta | No RSS page found; `/feed/` returns an HTML page, not a feed. |
+| PIB (en / hi / mr) | `pib.gov.in` answers HTTP 403 to our User-Agent, robots.txt included. Not bypassed (and no other host tried). |
+| Google News RSS | Not used: its terms are for personal use. |
+
+The Marathi gap remains (only BBC Marathi is enabled). Marathi publishers not on the candidate list (for example
+ABP Majha or TV9 Marathi) were not checked; say if you want them looked at.
 
 ## GDELT DOC 2.0 API (no key)
 **Investigations (2026-11-06):** an event makes a single OR query of its terms with `startdatetime` (at most 89 days

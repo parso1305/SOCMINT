@@ -39,6 +39,43 @@ sources:
   - {name: amarujala_india, type: rss, kind: news, publisher: Amar Ujala, lang: hi, url: "https://www.amarujala.com/rss/india-news.xml"}
   - {name: bbc_marathi, type: rss, kind: news, publisher: BBC Marathi, lang: mr, url: "https://feeds.bbci.co.uk/marathi/rss.xml"}
 
+  # ---------------- News RSS, proposed (M18.3, checked 2026-11-07; see SOURCES.md) ----------------
+  # Taken from the publisher's own RSS page (https://www.bhaskar.com/rss). HTTP 200 and robots.txt allows them.
+  # Not enabled: DB Corp's site terms describe the service as for personal, non-commercial use and ask for prior
+  # written consent before archived data sets are given to others. Enable only after you decide that is acceptable.
+  # Times of India, Navbharat Times, Maharashtra Times, Deccan Herald, Lokmat, Loksatta and PIB were checked and are
+  # not proposed (personal-use RSS terms, HTTP 403, or no RSS page); reasons in SOURCES.md.
+  # PROPOSED - awaiting approval
+  - name: bhaskar_national
+    type: rss
+    kind: news
+    publisher: Dainik Bhaskar
+    lang: hi
+    url: "https://www.bhaskar.com/rss-v1--category-1061.xml"
+    enabled: false
+    disabled_reason: "PROPOSED - awaiting approval (official feed from bhaskar.com/rss; see SOURCES.md)"
+    terms_note: "DB Corp terms: personal, non-commercial use; prior written consent to provide archived data sets"
+  # PROPOSED - awaiting approval
+  - name: bhaskar_maharashtra
+    type: rss
+    kind: news
+    publisher: Dainik Bhaskar
+    lang: hi
+    url: "https://www.bhaskar.com/rss-v1--category-2318.xml"
+    enabled: false
+    disabled_reason: "PROPOSED - awaiting approval (official feed from bhaskar.com/rss; see SOURCES.md)"
+    terms_note: "DB Corp terms: personal, non-commercial use; prior written consent to provide archived data sets"
+  # PROPOSED - awaiting approval
+  - name: bhaskar_new_delhi
+    type: rss
+    kind: news
+    publisher: Dainik Bhaskar
+    lang: hi
+    url: "https://www.bhaskar.com/rss-v1--category-7140.xml"
+    enabled: false
+    disabled_reason: "PROPOSED - awaiting approval (official feed from bhaskar.com/rss; see SOURCES.md)"
+    terms_note: "DB Corp terms: personal, non-commercial use; prior written consent to provide archived data sets"
+
   # ---------------- GDELT DOC 2.0 (zero-key) ----------------
   - name: gdelt_india
     type: gdelt
