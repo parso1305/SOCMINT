@@ -98,6 +98,9 @@ categorize:            # post categories (config/categories.yaml)
   zero_shot_min_score: 0.80
   zero_shot_hypothesis: "This text is about {}."
 
+showcase:
+  demo_max_age_hours: 12     # `showcase --demo` and `doctor` warn when data/demo.db is older ("last 24 h" goes stale)
+
 investigate:
   default_window_days: 7     # first collection of an event with no window start
   subject_window_days: 30    # first collection of a subject or group (recent public posts)

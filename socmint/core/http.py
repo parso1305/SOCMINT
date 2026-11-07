@@ -67,6 +67,7 @@ class PoliteClient:
         self.retries = retries if retries is not None else int(threshold("ingest.http_retries", 3))
         self.cache_dir = s.cache_dir / "http"
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
+        self._robots_status: dict[str, str] = {}  # base -> "HTTP 200" | "timeout" | "unreachable (...)"
         self._last_call: dict[str, float] = {}
         self._host_rate: dict[str, float] = {}
         # One lock per host (and per robots.txt base): parallel fetches to different hosts never wait on each
@@ -98,16 +99,31 @@ class PoliteClient:
                 try:
                     self._wait(p.netloc)  # robots.txt counts against the host's rate limit too
                     r = self._client.get(base + "/robots.txt", timeout=10)
+                    self._robots_status[base] = f"HTTP {r.status_code}"
                     ctype = r.headers.get("content-type", "")
                     if r.status_code == 200 and "html" not in ctype.lower():
                         rp.parse(r.text.splitlines())
                     else:
                         rp = None
-                except httpx.HTTPError:
+                except httpx.TimeoutException:
+                    self._robots_status[base] = "timeout"
+                    rp = None
+                except httpx.HTTPError as e:
+                    self._robots_status[base] = f"unreachable ({type(e).__name__})"
                     rp = None
                 self._robots[base] = rp
             rp = self._robots[base]
         return True if rp is None else rp.can_fetch(self.user_agent, url)
+
+    def probe(self, url: str) -> str:
+        """Is `url`'s host reachable? Answered by the (cached, rate-limited) robots.txt fetch, so a check before a
+        demo costs one polite request per host and warms the robots cache. Returns "HTTP <code>", "timeout",
+        "unreachable (...)" or "offline"."""
+        if is_offline():
+            return "offline"
+        self.allowed(url)
+        p = urlparse(url)
+        return self._robots_status.get(f"{p.scheme}://{p.netloc}", "HTTP 200")
 
     # -- rate limit -----------------------------------------------------------
     def _lock_for(self, key: str) -> threading.Lock:

@@ -14,6 +14,15 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 NO_KEY_SOURCES = ["bluesky", "mastodon", "news_rss", "gdelt"]
+# key-gated logical sources -> the Settings attributes (.env variables, upper-cased) they need
+KEY_GATED: dict[str, tuple[str, ...]] = {
+    "youtube": ("youtube_api_key",), "google_factcheck": ("google_factcheck_api_key",),
+    "reddit": ("reddit_client_id", "reddit_client_secret"), "telegram": ("telegram_api_id", "telegram_api_hash")}
+
+
+def default_event_sources() -> list[str]:
+    """Sources a new event uses by default right now: the no-key sources."""
+    return list(NO_KEY_SOURCES)
 # logical source name -> (sources.yaml type, rss kind or None)
 LOGICAL_SOURCES: dict[str, tuple[str, str | None]] = {
     "bluesky": ("bluesky", None), "mastodon": ("mastodon", None), "news_rss": ("rss", "news"),
@@ -68,7 +77,7 @@ class InvestigationConfig(BaseModel):
             if unknown:
                 raise ValueError(f"unknown platform(s) in handles: {unknown}; choose from {sorted(PLATFORMS)}")
         if not self.sources:
-            self.sources = (list(NO_KEY_SOURCES) if self.kind == "event"
+            self.sources = (default_event_sources() if self.kind == "event"
                             else [PLATFORMS[p] for p in self.handles if self.handles[p]])
         bad = sorted(set(self.sources) - set(LOGICAL_SOURCES))
         if bad:

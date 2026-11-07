@@ -225,6 +225,17 @@ def showcase(demo_db: bool = typer.Option(False, "--demo", help="Open data/demo.
 
 
 @app.command()
+def doctor(offline: bool = typer.Option(False, "--offline", help="Skip the reachability requests.")) -> None:
+    """Read-only check before a demo: keys (set/missing), event sources, reachability, models, ports, demo data."""
+    from socmint import doctor as doc
+
+    checks = doc.run_checks(network=not offline)
+    typer.echo(doc.render(checks))
+    if any(c.level == doc.FAIL for c in checks):
+        raise typer.Exit(1)
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from socmint import __version__
